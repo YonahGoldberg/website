@@ -1,24 +1,20 @@
-use super::{Board, Bitboard, Color, Piece};
+use crate::board::{Board, Color, Piece, Bitboard, bitboard, Dir, Square};
+
+use super::bitboard::RAY_ATTACKS;
 
 impl Board {
-    /// Returns the appropriate piece bitboard for
-    /// piece `p` of color `c`.
-    fn piece_bb(&self, c: Color, p: Piece) -> Bitboard {
-        self.piece_bb[p.num()] & self.piece_bb[6 + c.num() as usize]
-    }
-
     /// Returns a bitboard marking the squares pawns of color `c` can be 
     /// single pushed to under pseudo-legal move generation
     fn pawn_push_targets(&self, c: Color) -> Bitboard {
-        ((self.piece_bb(c, Piece::Pawn) << 8) >> (c.num() << 4)) & self.empty_bb
+        ((self.piece_bb(c, Piece::Pawn) << 8) >> ((c as i32) << 4)) & self.empty_bb
     }
     /// Returns a bitboard marking the squares pawns of color `c` can be
     /// double pushed to under pseudo-legal move generation
     fn pawn_dpush_targets(&self, c: Color) -> Bitboard {
         let push_targets = self.pawn_push_targets(c);
         match c {
-            Color::White => Board::nort_one(push_targets) & self.empty_bb & Board::RANK4,
-            Color::Black => Board::sout_one(push_targets) & self.empty_bb & Board::RANK5,
+            Color::White => Bitboard::nort_one(push_targets) & self.empty_bb & bitboard::RANK4,
+            Color::Black => Bitboard::sout_one(push_targets) & self.empty_bb & bitboard::RANK5,
         }
     }
 
@@ -27,8 +23,8 @@ impl Board {
     fn pawn_can_push(&self, c: Color) -> Bitboard {
         let piece_bb = self.piece_bb(c, Piece::Pawn);
         match c {
-            Color::White => Board::sout_one(self.empty_bb) & piece_bb,
-            Color::Black => Board::nort_one(self.empty_bb) & piece_bb,
+            Color::White => Bitboard::sout_one(self.empty_bb) & piece_bb,
+            Color::Black => Bitboard::nort_one(self.empty_bb) & piece_bb,
         }
     }
 
@@ -39,12 +35,12 @@ impl Board {
         let piece_bb = self.piece_bb(c, Piece::Pawn);
         match c {
             Color::White => {
-                let empty_rank3 = Board::sout_one(self.empty_bb & Board::RANK4) & self.empty_bb;
-                Board::sout_one(empty_rank3) & piece_bb
+                let empty_rank3 = Bitboard::sout_one(self.empty_bb & bitboard::RANK4) & self.empty_bb;
+                Bitboard::sout_one(empty_rank3) & piece_bb
             }
             Color::Black => {
-                let empty_rank6 = Board::nort_one(self.empty_bb & Board::RANK5) & self.empty_bb;
-                Board::sout_one(empty_rank6) & piece_bb
+                let empty_rank6 = Bitboard::nort_one(self.empty_bb & bitboard::RANK5) & self.empty_bb;
+                Bitboard::sout_one(empty_rank6) & piece_bb
             }
         }
     }
@@ -54,8 +50,8 @@ impl Board {
     fn pawn_east_attacks(&self, c: Color) -> Bitboard {
         let piece_bb = self.piece_bb(c, Piece::Pawn);
         match c {
-            Color::White => Board::noea_one(piece_bb),
-            Color::Black => Board::soea_one(piece_bb),
+            Color::White => Bitboard::noea_one(piece_bb),
+            Color::Black => Bitboard::soea_one(piece_bb),
         }
     }
 
@@ -64,8 +60,8 @@ impl Board {
     fn pawn_west_attacks(&self, c: Color) -> Bitboard {
         let piece_bb = self.piece_bb(c, Piece::Pawn);
         match c {
-            Color::White => Board::nowe_one(piece_bb),
-            Color::Black => Board::sowe_one(piece_bb),
+            Color::White => Bitboard::nowe_one(piece_bb),
+            Color::Black => Bitboard::sowe_one(piece_bb),
         }
     }
 
@@ -122,5 +118,43 @@ impl Board {
     /// can capture another pawn in any direction under pseudo-legal move generation
     fn pawn_can_capture_pawn(&self, c: Color) -> Bitboard {
         self.piece_bb(c, Piece::Pawn) & self.pawn_attacks(c.opp())
+    }
+
+    fn ray_attacks(&self, d: Dir, s: Square) -> Bitboard {
+        let mut attacks = bitboard::RAY_ATTACKS[d as usize][s as usize];
+        let blocking = attacks & self.occupied_bb;
+        let blocker = if d.pos() { blocking.bit_scan() } else { blocking.bit_scan_reverse() };
+        if let Some(blocker) = blocker {
+            attacks ^= RAY_ATTACKS[d as usize][blocker as usize];
+        }
+        attacks
+    }
+
+    fn diag_attacks(&self, s: Square) -> Bitboard {
+        self.ray_attacks(Dir::Noea, s) | self.ray_attacks(Dir::Sowe, s)
+    }
+
+    fn anti_diag_attacks(&self, s: Square) -> Bitboard {
+        self.ray_attacks(Dir::Nowe, s) | self.ray_attacks(Dir::Soea, s)
+    }
+
+    fn file_attacks(&self, s: Square) -> Bitboard {
+        self.ray_attacks(Dir::Nort, s) | self.ray_attacks(Dir::Sout, s)
+    }
+
+    fn rank_attacks(&self, s: Square) -> Bitboard {
+        self.ray_attacks(Dir::East, s) | self.ray_attacks(Dir::West, s)
+    }
+
+    fn bishop_attacks(&self, s: Square) -> Bitboard {
+        self.diag_attacks(s) | self.anti_diag_attacks(s)
+    }
+
+    fn rook_attacks(&self, s: Square) -> Bitboard {
+        self.file_attacks(s) | self.rank_attacks(s)
+    }
+
+    fn queen_attacks(&self, s: Square) -> Bitboard {
+        self.rook_attacks(s) | self.bishop_attacks(s)
     }
 }
