@@ -1,6 +1,6 @@
 /// A bitboard is represented as a 64 bit unsigned integer, 1 bit
 /// per square for the standard 8x8 chess board. A 1 bit set indicates
-/// the presense (or lack thereof) of some property for that square.
+/// the presence (or lack thereof) of some property for that square.
 /// Properties include a particular piece being present, that square being
 /// a potential target, etc... These bitboard are implmented in 
 /// Little Endian Rank-File (LERF) order, meaning towards higher
