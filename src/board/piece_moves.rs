@@ -1,7 +1,5 @@
 use crate::board::{Board, Color, Piece, Bitboard, bitboard, Dir, Square};
 
-use super::bitboard::RAY_ATTACKS;
-
 impl Board {
     /// Returns a bitboard marking the squares pawns of color `c` can be 
     /// single pushed to under pseudo-legal move generation
@@ -125,7 +123,7 @@ impl Board {
         let blocking = attacks & self.occupied_bb;
         let blocker = if d.pos() { blocking.bit_scan() } else { blocking.bit_scan_reverse() };
         if let Some(blocker) = blocker {
-            attacks ^= RAY_ATTACKS[d as usize][blocker as usize];
+            attacks ^= bitboard::RAY_ATTACKS[d as usize][blocker as usize];
         }
         attacks
     }
