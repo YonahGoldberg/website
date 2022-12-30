@@ -98,6 +98,6 @@ impl Board {
     /// Returns the appropriate piece bitboard for
     /// piece `p` of color `c`.
     pub fn piece_bb(&self, c: Color, p: Piece) -> Bitboard {
-        Bitboard(self.piece_bb[p as usize].0 & self.piece_bb[6 + c as usize].0)
+        self.piece_bb[p as usize] & self.piece_bb[6 + c as usize]
     }
 }
