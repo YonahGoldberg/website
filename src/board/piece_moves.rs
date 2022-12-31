@@ -216,10 +216,29 @@ impl Board {
         false
     }
 
+    /// Returns a bitboard marking the squares a rook on `rook_square` attacks
+    /// with one piece allowed to be xrayed through in each ray direction. `blockers`
+    /// specifies the set of squares in which a piece may block a ray.
+    /// This function is useful for finding pins.
     fn xray_rook_attacks(&self, blockers: Bitboard, rook_square: Square) -> Bitboard {
         let attacks = self.rook_attacks(rook_square, None);
         // Pieces in the way of the ray attack
         let actual_blockers = attacks & blockers;
+        // Symmetric difference between the original attack ray with all the blockers
+        // and the ray if you take away the first blocker
         attacks ^ self.rook_attacks(rook_square, Some(actual_blockers ^ self.occupied_bb))
+    }
+
+    /// Returns a bitboard marking the squares a bishop on `bishop_square` attacks
+    /// with one piece allowed to be xrayed through in each ray direction. `blockers`
+    /// specifies the set of squares in which a piece may block a ray.
+    /// This function is useful for finding pins. 
+    fn xray_bishop_attacks(&self, blockers: Bitboard, bishop_square: Square) -> Bitboard {
+        let attacks = self.bishop_attacks(bishop_square, None);
+        // Pieces in the way of the ray attack
+        let actual_blockers = attacks & blockers;
+        // Symmetric difference between the original attack ray with all the blockers
+        // and the ray if you take away the first blocker
+        attacks ^ self.bishop_attacks(bishop_square, Some(actual_blockers ^ self.occupied_bb))
     }
 }
