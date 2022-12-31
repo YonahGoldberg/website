@@ -2,6 +2,7 @@ mod bitboard;
 mod piece_moves;
 // mod piece_moves;
 use bitboard::Bitboard;
+use std::ops::{Index, IndexMut};
 
 /// The colors of pieces
 #[derive(Clone, Copy)]
@@ -96,8 +97,13 @@ impl Board {
     }
 
     /// Returns the appropriate piece bitboard for
-    /// piece `p` of color `c`.
-    pub fn piece_bb(&self, c: Color, p: Piece) -> Bitboard {
-        self.piece_bb[p as usize] & self.piece_bb[6 + c as usize]
+    /// piece `p` intersected with the piece bitboard
+    /// for the color `c`, if `c` is not `None`
+    pub fn piece_bb(&self, c: Option<Color>, p: Piece) -> Bitboard {
+        let intersection = match c {
+            Some(c) => self.piece_bb[6 + c as usize],
+            None => Bitboard(!0),
+        };
+        self.piece_bb[p as usize] & intersection
     }
 }

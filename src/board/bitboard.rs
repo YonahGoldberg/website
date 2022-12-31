@@ -12,10 +12,11 @@
 use std::ops::{
     BitAnd, BitAndAssign, BitOr, 
     BitOrAssign, BitXor, BitXorAssign, 
-    Shl, ShlAssign, Shr, ShrAssign, Not
+    Shl, ShlAssign, Shr, ShrAssign, Not,
+
 };
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Bitboard(pub u64);
 
 /// Constants used to initialize bitboards
@@ -113,6 +114,8 @@ impl Bitboard {
         if trailing_zeros == 64 { None } else { Some(trailing_zeros) }
     }
 
+    /// Returns the index of the most significant 1 bit, or None
+    /// if there is no 1 bit
     pub fn bit_scan_reverse(&self) -> Option<u32> {
         let leading_zeros = self.0.leading_zeros();
         if leading_zeros == 64 { None } else { Some(leading_zeros) }
@@ -138,6 +141,8 @@ impl ToString for Bitboard {
     }
 }
 
+// Implementation of bitwise operations for bitboards
+// Just use the operation on the inner u64
 impl BitAnd for Bitboard {
     type Output = Bitboard;
 
