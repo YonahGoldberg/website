@@ -241,4 +241,6 @@ impl Board {
         // and the ray if you take away the first blocker
         attacks ^ self.bishop_attacks(bishop_square, Some(actual_blockers ^ self.occupied_bb))
     }
+
+    
 }
