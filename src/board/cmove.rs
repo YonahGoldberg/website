@@ -1,4 +1,5 @@
 use super::Square;
+use num::FromPrimitive;
 
 pub const QUIET: u16 = 0;
 pub const PAWN_DPUSH: u16 = 1;
@@ -23,11 +24,12 @@ impl Cmove {
 
     pub fn get_from(&self) -> Square {
         // Index can't be more than 63
-        Square::from_u16((self.0 >> 6) & 0x3f).unwrap()
+        // Square::from_u16((self.0 >> 6) & 0x3f).unwrap()
+        FromPrimitive::from_u16((self.0 >> 6) & 0x3f).unwrap()
     }
 
     pub fn get_to(&self) -> Square {
         // Index can't be more than 63
-        Square::from_u16(self.0 & 0x3f).unwrap()
+        FromPrimitive::from_u16(self.0 & 0x3f).unwrap()
     }
 }
