@@ -2,6 +2,7 @@ pub mod bitboard;
 mod cmove;
 use bitboard::Bitboard;
 use num::FromPrimitive;
+use cmove::Cmove;
 
 /// The colors of pieces
 use Color::*;
@@ -62,6 +63,14 @@ pub enum Square {
     A6, B6, C6, D6, E6, F6, G6, H6,
     A7, B7, C7, D7, E7, F7, G7, H7,
     A8, B8, C8, D8, E8, F8, G8, H8,
+}
+
+impl Square {
+    /// Returns a bitboard with a one set on this square and
+    /// zeroes everywhere else
+    fn as_bitboard(&self) -> Bitboard {
+        Bitboard(1) << *self as i32
+    }
 }
 
 /// The main `Board` struct, which contains 10 bitboards
@@ -360,7 +369,7 @@ impl Board {
     /// Returns a bitboard marking the squares in between `from` and `to` along
     /// a ray in one of the eight cardinal directions. Returns an empty bitboard
     /// if `from` and `to` are not along a cardinal direction.
-    pub fn in_between(from: Square, to: Square) -> Bitboard {
+    fn in_between(from: Square, to: Square) -> Bitboard {
         bitboard::IN_BETWEEN[from as usize][to as usize]
     }
 
@@ -407,5 +416,70 @@ impl Board {
         }
 
         pinned
+    }
+
+    /// Makes the move `m`, updating this board's internal state
+    /// This function assumes `m` is a valid move
+    pub fn make_move_mut(&mut self, m: Cmove) {
+        // a one on the from square, else zeroes
+        let from_bb = m.get_from().as_bitboard();
+        // a one on the to square, else zeroes
+        let to_bb = m.get_to().as_bitboard();
+        // ones on the from and to squares, else zeroes
+        let from_to_bb = from_bb ^ to_bb;
+        // Assuming this is a valid move and there is a piece on the square
+        let (piece, color) = self.piece_on_square(m.get_from()).unwrap();
+
+        if m.is_capture() {
+            // If captured piece is different than piece, this is correct,
+            // otherwise the to square will be set to 0 instead of 1
+            self.piece_bb[piece as usize] ^= from_to_bb;
+            // Update from piece's color bit
+            self.piece_bb[6 + color as usize] ^= from_to_bb;
+
+            let (captured_piece, captured_color) = self.piece_on_square(m.get_to()).unwrap();
+            // If captured piece is different than piece, we update
+            // captured piece bitboard normally, otherwise we flip the bit that was incorrect
+            self.piece_bb[captured_piece as usize] ^= to_bb;
+            // update captured color bitboard
+            self.piece_bb[6 + captured_color as usize] ^= to_bb;
+            // occupied bitboard has new empty square
+            self.occupied_bb ^= from_bb;
+            // empty bitboard has new empty square
+            self.empty_bb ^= from_bb;
+        } else {
+            // update piece bitboard
+            self.piece_bb[piece as usize] ^= from_to_bb;
+            // update color bitboard
+            self.piece_bb[6 + color as usize] ^= from_to_bb;
+            // occupied bitboard has new empty square
+            self.occupied_bb ^= from_bb;
+            // empty bitboard has new empty square
+            self.empty_bb ^= from_bb; 
+        }
+    }
+
+    /// Returns `Some(p)` if there exists a piece `p` on square `s`,
+    /// otherwise None
+    pub fn piece_on_square(&self, s: Square) -> Option<(Piece, Color)> {
+        let bb = s.as_bitboard();
+
+        let c = if bb & self.color_bb(White) > Bitboard(0) { 
+            White 
+        } else if bb & self.color_bb(Black) > Bitboard(0) { 
+            Black 
+        } else { 
+            return None;
+        };
+
+        for i in 0..6 {
+            if self.piece_bb[i] & bb > Bitboard(0) {
+                let p = FromPrimitive::from_usize(i).unwrap();
+                return Some((p, c));
+            }
+        }
+
+        // Shouldn't get here
+        panic!();
     }
 }
