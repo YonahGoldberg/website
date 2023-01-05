@@ -71,6 +71,19 @@ impl Square {
     fn as_bitboard(&self) -> Bitboard {
         Bitboard(1) << *self as i32
     }
+
+    /// Returns `Some(s)` if there exists a square `s` `steps` steps
+    /// away from this square in direction `dir`, otherwise `None`.
+    /// Moving east nine is equivalent to moving north one and moving
+    /// west 9 is equivalent to moving south one, and so on so that
+    /// east and west rap around until they can't anymore.
+    fn translate(&self, dir: Dir, steps: i32) -> Option<Square> {
+        let amount = match dir {
+            Nort => 8, Noea => 9, East => 1, Soea => -7,
+            Sout => -8, Sowe => -9, West => -1, Nowe => 7,
+        };
+        FromPrimitive::from_i32(*self as i32 + amount * steps)
+    }
 }
 
 /// The main `Board` struct, which contains 10 bitboards
@@ -375,7 +388,10 @@ impl Board {
 
     /// Returns a bitboard marking the pins on color `on_color` with king on
     /// square `king_square`
-    fn pins(&self, on_color: Color, king_square: Square) -> Bitboard {
+    fn pins(&self, on_color: Color) -> Bitboard {
+        let king_bb = self.piece_bb(Some(on_color), King);
+        let king_square: Square = FromPrimitive::from_u32(king_bb.bit_scan().unwrap()).unwrap();
+
         let op_rq = self.piece_bb(Some(on_color.op()), Rook) 
             | self.piece_bb(Some(on_color.op()), Queen);
         let mut pinned: Bitboard = Bitboard(0);
@@ -481,5 +497,61 @@ impl Board {
 
         // Shouldn't get here
         panic!();
+    }
+
+    pub fn generate_moves(&self, for_color: Color) -> Vec<Cmove> {
+        let mut moves: Vec<Cmove> = vec![];
+        // Ones on squares where a pinned piece lies (they can't move)
+        let pins = self.pins(for_color);
+        let not_pinned = !pins;
+        let op_occupied = self.color_bb(for_color.op());
+        
+        // For every piece type
+        for i in 0..6 {
+            let piece = FromPrimitive::from_i32(i).unwrap();
+            let mut piece_bb = self.piece_bb(Some(for_color), piece) & not_pinned;
+            match piece {
+                Pawn => {
+                    let can_push = self.pawn_can_push(for_color);
+                    let can_dpush = self.pawn_can_dpush(for_color);
+                    
+                    // For every pawn
+                    while piece_bb > Bitboard(0) {
+                        let from_square: Square = FromPrimitive::from_u32(piece_bb.bit_scan().unwrap()).unwrap();
+                        let mut can_attack = bitboard::PAWN_ATTACKS[for_color as usize][from_square as usize] & op_occupied;
+                        let this_pawn_bb = from_square.as_bitboard();
+
+                        // If this pawn can be single pushed
+                        if can_push & this_pawn_bb > Bitboard(0) {
+                            let to_dir = match for_color {
+                                White => Nort, Black => Sout,
+                            };
+                            // We can unwrap since we know this pawn can be pushed
+                            let to_square = from_square.translate(to_dir, 1).unwrap();
+                            moves.push(Cmove::new(from_square, to_square, cmove::QUIET));
+                        }
+
+                        // If this pawn can be double pushed
+                        if can_dpush & this_pawn_bb > Bitboard(0) {
+                            let to_dir = match for_color {
+                                White => Nort, Black => Sout,
+                            };
+                            // We can unwrap since we know this pawn can be pushed
+                            let to_square = from_square.translate(to_dir, 2).unwrap();
+                            moves.push(Cmove::new(from_square, to_square, cmove::PAWN_DPUSH));
+                        }
+                        
+                        // For every piece this pawn attacks
+                        while can_attack > Bitboard(0) {
+                            let to_square = FromPrimitive::from_u32(can_attack.bit_scan().unwrap()).unwrap();
+                            moves.push(Cmove::new(from_square, to_square, cmove::CAPTURE));
+                            can_attack &= can_attack - Bitboard(1); 
+                        }
+
+                    }
+                }
+            }
+        }
+        vec![]
     }
 }
