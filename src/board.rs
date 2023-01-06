@@ -155,7 +155,7 @@ impl Board {
 
     /// Returns a bitboard marking the squares of pawns of color `c` that can be
     /// single pushed under pseudo-legal move generation
-    fn pawn_can_push(&self, c: Color) -> Bitboard {
+    fn pawns_can_push(&self, c: Color) -> Bitboard {
         let piece_bb = self.piece_bb(Some(c), Pawn);
         match c {
             White => Bitboard::sout_one(self.empty_bb) & piece_bb,
@@ -166,7 +166,7 @@ impl Board {
 
     /// Returns a bitboard marking the squares of pawns of color `c` that can be
     /// double pushed under pseudo-legal move generation
-    fn pawn_can_dpush(&self, c: Color) -> Bitboard {
+    fn pawns_can_dpush(&self, c: Color) -> Bitboard {
         let piece_bb = self.piece_bb(Some(c), Pawn);
         match c {
             White => {
@@ -182,7 +182,7 @@ impl Board {
 
     /// Returns a bitboard marking the squares pawns of color `c` can attack
     /// to the east under pseudo-legal move generation
-    fn pawn_east_attacks(&self, c: Color) -> Bitboard {
+    fn pawn_east_attack_squares(&self, c: Color) -> Bitboard {
         let piece_bb = self.piece_bb(Some(c), Pawn);
         match c {
             White => Bitboard::noea_one(piece_bb),
@@ -192,7 +192,7 @@ impl Board {
 
     /// Returns a bitboard marking the squares pawns of color `c` can attack
     /// to the west under pseudo-legal move generation
-    fn pawn_west_attacks(&self, c: Color) -> Bitboard {
+    fn pawn_west_attack_squares(&self, c: Color) -> Bitboard {
         let piece_bb = self.piece_bb(Some(c), Pawn);
         match c {
             White => Bitboard::nowe_one(piece_bb),
@@ -202,62 +202,62 @@ impl Board {
 
     /// Returns a bitboard marking the squares pawns of color `c` can attack
     /// under pseudo-legal move generation
-    fn pawn_attacks(&self, c: Color) -> Bitboard {
-        self.pawn_west_attacks(c) | self.pawn_east_attacks(c)
+    fn pawn_attack_squares(&self, c: Color) -> Bitboard {
+        self.pawn_west_attack_squares(c) | self.pawn_east_attack_squares(c)
     }
 
     /// Returns a bitboard marking the squares in which 2 pawns of color `c` can attack
     /// under pseudo-legal move generation
-    fn pawn_dbl_attacks(&self, c: Color) -> Bitboard {
-        self.pawn_west_attacks(c) & self.pawn_east_attacks(c)
+    fn pawn_dbl_attack_squares(&self, c: Color) -> Bitboard {
+        self.pawn_west_attack_squares(c) & self.pawn_east_attack_squares(c)
     }
 
     /// Returns a bitboard marking the squares in which a single pawn of color `c` attacks
     /// under pseudo-legal move generation
-    fn pawn_single_attacks(&self, c: Color) -> Bitboard {
-        self.pawn_west_attacks(c) ^ self.pawn_east_attacks(c)
+    fn pawn_single_attack_squares(&self, c: Color) -> Bitboard {
+        self.pawn_west_attack_squares(c) ^ self.pawn_east_attack_squares(c)
     }
 
     /// Returns a bitboard marking safe pawn squares. A safe pawn square
     /// for the player playing color `c` are the squares in which they have
     /// more pawns attacking than their oponent
     fn pawn_safe_sqares(&self, c: Color) -> Bitboard {
-        self.pawn_dbl_attacks(c) | 
-        !self.pawn_attacks(c.op()) | 
-        (self.pawn_single_attacks(c) & !self.pawn_dbl_attacks(c.op()))
+        self.pawn_dbl_attack_squares(c) | 
+        !self.pawn_attack_squares(c.op()) | 
+        (self.pawn_single_attack_squares(c) & !self.pawn_dbl_attack_squares(c.op()))
     }
 
     /// Returns a bitboard marking the pawns of color `c` that
     /// can capture another pawn to the east under pseudo-legal move generation
-    fn pawn_can_capture_pawn_east(&self, c: Color) -> Bitboard {
+    fn pawns_can_capture_pawn_east(&self, c: Color) -> Bitboard {
         match c {
             White => self.piece_bb(Some(White), Pawn) 
-                & self.pawn_west_attacks(Black),
+                & self.pawn_west_attack_squares(Black),
             Black => self.piece_bb(Some(Black), Pawn) 
-                & self.pawn_east_attacks(White),
+                & self.pawn_east_attack_squares(White),
         }
     }
 
     /// Returns a bitboard marking the pawns of color `c` that
     /// can capture another pawn to the west under pseudo-legal move generation
-    fn pawn_can_capture_pawn_west(&self, c: Color) -> Bitboard {
+    fn pawns_can_capture_pawn_west(&self, c: Color) -> Bitboard {
         match c {
             White => self.piece_bb(Some(White), Pawn)
-                & self.pawn_east_attacks(Black),
+                & self.pawn_east_attack_squares(Black),
             Black => self.piece_bb(Some(Black), Pawn)
-                & self.pawn_east_attacks(White),
+                & self.pawn_east_attack_squares(White),
         }
     }
 
     /// Returns a bitboard marking the pawns of color `c` that
     /// can capture another pawn in any direction under pseudo-legal move generation
-    fn pawn_can_capture_pawn(&self, c: Color) -> Bitboard {
-        self.piece_bb(Some(c), Pawn) & self.pawn_attacks(c.op())
+    fn pawns_can_capture_pawn(&self, c: Color) -> Bitboard {
+        self.piece_bb(Some(c), Pawn) & self.pawn_attack_squares(c.op())
     }
 
     /// Returns a bitboard marking ray attacks in direction `d` from
     /// square `s`. Ray attacks flow in direction `d`, but stop when
-    /// a piece blocks the ray
+    /// a piece blocks the ray. The attack set includes the stopping piece.
     pub fn ray_attacks(&self, d: Dir, s: Square, occupied_bb: Option<Bitboard>) -> Bitboard {
         let occupied_bb = match occupied_bb {
             Some(b) => b,
@@ -297,46 +297,65 @@ impl Board {
     }
 
     /// Returns a bitboard marking bishop attacks
-    /// from square `s`
+    /// from square `s` under pseudo-legal move generation
     fn bishop_attacks(&self, s: Square, occupied_bb: Option<Bitboard>) -> Bitboard {
         self.diag_attacks(s, occupied_bb) | self.anti_diag_attacks(s, occupied_bb)
     }
 
     /// Returns a bitboard marking rook attacks
-    /// from square `s`
+    /// from square `s` under pseudo-legal move generation
     fn rook_attacks(&self, s: Square, occupied_bb: Option<Bitboard>) -> Bitboard {
         self.file_attacks(s, occupied_bb) | self.rank_attacks(s, occupied_bb)
     }
 
     /// Returns a bitboard marking queen attacks
-    /// from square `s`
+    /// from square `s` under pseudo-legal move generation
     fn queen_attacks(&self, s: Square, occupied_bb: Option<Bitboard>) -> Bitboard {
         self.rook_attacks(s, occupied_bb) | self.bishop_attacks(s, occupied_bb)
     }
 
+    /// Returns a bitboard marking pawn attacks
+    /// from square `s` of a pawn of color `c` under pseudo-legal move generation
+    fn pawn_attacks(s: Square, c: Color) -> Bitboard {
+        bitboard::PAWN_ATTACKS[c as usize][s as usize]
+    }
+
+    /// Returns a bitboard marking knight attacks
+    /// from square `s` under pseudo-legal move generation
+    fn knight_attacks(s: Square) -> Bitboard {
+        bitboard::KNIGHT_ATTACKS[s as usize]
+    }
+
+    /// Returns a bitboard marking king attacks
+    /// from square `s` under pseudo-legal move generation
+    fn king_attacks(s: Square) -> Bitboard {
+        bitboard::KING_ATTACKS[s as usize]
+    }
+
     /// Returns a bitboard marking squares with pieces present that
-    /// attack square `s`
+    /// attack square `s` under pseudo-legal move generation
     fn attacks_to(&self, s: Square) -> Bitboard {
-        bitboard::PAWN_ATTACKS[White as usize][s as usize] & self.piece_bb(Some(Black), Pawn) |
-        bitboard::PAWN_ATTACKS[Black as usize][s as usize] & self.piece_bb(Some(White), Pawn) |
-        bitboard::KNIGHT_ATTACKS[s as usize] & self.piece_bb(None, Knight) |
-        bitboard::KING_ATTACKS[s as usize] & self.piece_bb(None, King) |
+        Board::pawn_attacks(s, White) & self.piece_bb(Some(Black), Pawn) |
+        Board::pawn_attacks(s, Black) & self.piece_bb(Some(White), Pawn) |
+        Board::knight_attacks(s) & self.piece_bb(None, Knight) |
+        Board::king_attacks(s) & self.piece_bb(None, King) |
         self.bishop_attacks(s, None) & (self.piece_bb(None, Bishop) | self.piece_bb(None, Queen)) |
         self.rook_attacks(s, None) & (self.piece_bb(None, Rook) | self.piece_bb(None, Queen))
     }
 
-    /// Returns true if square `s` is attacked by side `by_side`, otherwise false
+    /// Returns true if square `s` is attacked by side `by_side`
+    /// under pseudo-legal move generation, otherwise false
     fn attacked(&self, s: Square, by_side: Color) -> bool {
         let pawns = self.piece_bb(Some(by_side), Pawn);
-        if bitboard::PAWN_ATTACKS[by_side.op() as usize][s as usize] & pawns != Bitboard(0) {
+        if Board::pawn_attacks(s, by_side.op()) & pawns != Bitboard(0) {
             return true;
         }
         let knights = self.piece_bb(Some(by_side), Knight);
-        if bitboard::KNIGHT_ATTACKS[s as usize] & knights != Bitboard(0) {
+        if Board::knight_attacks(s) & knights != Bitboard(0) {
             return true;
         }
         let king = self.piece_bb(Some(by_side), King);
-        if bitboard::KING_ATTACKS[s as usize] & king != Bitboard(0) {
+        if Board::king_attacks(s) & king != Bitboard(0) {
             return true;
         }
         let bishops_queen = self.piece_bb(Some(by_side), Bishop)
@@ -499,59 +518,80 @@ impl Board {
         panic!();
     }
 
+    /// Generates a list of moves for color `for_color`
+    /// Given the current board state
     pub fn generate_moves(&self, for_color: Color) -> Vec<Cmove> {
-        let mut moves: Vec<Cmove> = vec![];
-        // Ones on squares where a pinned piece lies (they can't move)
+        let mut moves = vec![];
         let pins = self.pins(for_color);
         let not_pinned = !pins;
-        let op_occupied = self.color_bb(for_color.op());
+        let op_occupied = self.color_bb(for_color.op()); 
+
+        let pawn_bb = self.piece_bb(Some(for_color), Pawn) & not_pinned;
+        let can_push = self.pawns_can_push(for_color);
+        let can_dpush = self.pawns_can_dpush(for_color);
         
-        // For every piece type
-        for i in 0..6 {
-            let piece = FromPrimitive::from_i32(i).unwrap();
-            let mut piece_bb = self.piece_bb(Some(for_color), piece) & not_pinned;
-            match piece {
-                Pawn => {
-                    let can_push = self.pawn_can_push(for_color);
-                    let can_dpush = self.pawn_can_dpush(for_color);
-                    
-                    // For every pawn
-                    while piece_bb > Bitboard(0) {
-                        let from_square: Square = FromPrimitive::from_u32(piece_bb.bit_scan().unwrap()).unwrap();
-                        let mut can_attack = bitboard::PAWN_ATTACKS[for_color as usize][from_square as usize] & op_occupied;
-                        let this_pawn_bb = from_square.as_bitboard();
+        // For every pawn
+        for from_square in pawn_bb {
+            let can_attack = Board::pawn_attacks(from_square, for_color) & op_occupied;
+            let this_pawn_bb = from_square.as_bitboard();
 
-                        // If this pawn can be single pushed
-                        if can_push & this_pawn_bb > Bitboard(0) {
-                            let to_dir = match for_color {
-                                White => Nort, Black => Sout,
-                            };
-                            // We can unwrap since we know this pawn can be pushed
-                            let to_square = from_square.translate(to_dir, 1).unwrap();
-                            moves.push(Cmove::new(from_square, to_square, cmove::QUIET));
-                        }
+            // If this pawn can be single pushed
+            if can_push & this_pawn_bb > Bitboard(0) {
+                let to_dir = match for_color {
+                    White => Nort, Black => Sout,
+                };
+                // We can unwrap since we know this pawn can be pushed
+                let to_square = from_square.translate(to_dir, 1).unwrap();
+                moves.push(Cmove::new(from_square, to_square, cmove::QUIET));
+            }
 
-                        // If this pawn can be double pushed
-                        if can_dpush & this_pawn_bb > Bitboard(0) {
-                            let to_dir = match for_color {
-                                White => Nort, Black => Sout,
-                            };
-                            // We can unwrap since we know this pawn can be pushed
-                            let to_square = from_square.translate(to_dir, 2).unwrap();
-                            moves.push(Cmove::new(from_square, to_square, cmove::PAWN_DPUSH));
-                        }
-                        
-                        // For every piece this pawn attacks
-                        while can_attack > Bitboard(0) {
-                            let to_square = FromPrimitive::from_u32(can_attack.bit_scan().unwrap()).unwrap();
-                            moves.push(Cmove::new(from_square, to_square, cmove::CAPTURE));
-                            can_attack &= can_attack - Bitboard(1); 
-                        }
+            // If this pawn can be double pushed
+            if can_dpush & this_pawn_bb > Bitboard(0) {
+                let to_dir = match for_color {
+                    White => Nort, Black => Sout,
+                };
+                // We can unwrap since we know this pawn can be pushed
+                let to_square = from_square.translate(to_dir, 2).unwrap();
+                moves.push(Cmove::new(from_square, to_square, cmove::PAWN_DPUSH));
+            }
+            
+            // For every piece this pawn attacks
+            for to_square in can_attack {
+                moves.push(Cmove::new(from_square, to_square, cmove::CAPTURE));
+            }
+        }
 
+        // For every other piece
+        for piece in (1..6).map(|i| -> Piece { FromPrimitive::from_i32(i).unwrap() }) {
+            let piece_bb = self.piece_bb(Some(for_color), piece);
+            // For every piece of that type 
+            for from_square in piece_bb {
+                let can_attack = match piece {
+                    Knight => Board::knight_attacks(from_square),
+                    Bishop => self.bishop_attacks(from_square, None),
+                    Rook => self.rook_attacks(from_square, None),
+                    Queen => self.queen_attacks(from_square, None),
+                    King => Board::king_attacks(from_square),
+                    Pawn => panic!() // Can't happen
+                };
+                
+                // For every piece this knight attacks
+                for to_square in can_attack {
+                    let to_square_bb = to_square.as_bitboard();
+                    // Can't move to a square with our piece
+                    if to_square_bb & self.color_bb(for_color) > Bitboard(0) {
+                        continue;
                     }
+                    let flag = if to_square_bb & self.occupied_bb > Bitboard(0) {
+                        cmove::CAPTURE
+                    } else {
+                        cmove::QUIET
+                    };
+                    moves.push(Cmove::new(from_square, to_square, flag)); 
                 }
             }
         }
-        vec![]
+
+        moves
     }
 }

@@ -11,6 +11,8 @@
 
 pub mod tables;
 pub use tables::*;
+use super::Square;
+use num::FromPrimitive;
 use std::ops::{
     BitAnd, BitAndAssign, BitOr, 
     BitOrAssign, BitXor, BitXorAssign, 
@@ -123,6 +125,20 @@ impl ToString for Bitboard {
             res += "\n";
         }
         return res;
+    }
+}
+
+/// Iterate over the squares set to one in the bitboard
+impl Iterator for Bitboard {
+    type Item = Square;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if *self == Bitboard(0) {
+            return None;
+        }
+        let next_square: Square = FromPrimitive::from_u32(self.bit_scan().unwrap()).unwrap();
+        *self &= *self - Bitboard(1);
+        Some(next_square)
     }
 }
 
