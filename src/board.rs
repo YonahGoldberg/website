@@ -95,11 +95,13 @@ impl Square {
 /// black pieces.
 /// 
 /// The `empty_bb` and `occupied_bb` boards mark the absense of and the presense 
-/// of pieces, respectively.
+/// of pieces, respectively. The `en_passant_bb` marks the pawns that can be 
+/// captured by en passant (they just double pushed)
 pub struct Board {
     piece_bb: [Bitboard; 8],
     empty_bb: Bitboard,
     occupied_bb: Bitboard,
+    en_passant_bb: Bitboard,
 }
 
 impl Board {
@@ -119,6 +121,7 @@ impl Board {
             ],
             empty_bb: bitboard::EMPTY_START,
             occupied_bb: bitboard::OCCUPIED_START,
+            en_passant_bb: Bitboard(0),
         }
     }
 
@@ -178,6 +181,24 @@ impl Board {
                 Bitboard::sout_one(empty_rank6) & piece_bb
             }
         }
+    }
+
+    fn pawn_can_ep_east(&self) -> Bitboard {
+        let ep_square = match self.en_passant_bb.bit_scan() {
+            Some(s) => s,
+            None => return Bitboard(0),
+        };
+        let (_, ep_color) = self.piece_on_square(ep_square).unwrap();
+        Bitboard::west_one(self.en_passant_bb) & self.color_bb(ep_color.op())
+    }
+
+    fn pawn_can_ep_west(&self) -> Bitboard {
+        let ep_square = match self.en_passant_bb.bit_scan() {
+            Some(s) => s,
+            None => return Bitboard(0),
+        };
+        let (_, ep_color) = self.piece_on_square(ep_square).unwrap();
+        Bitboard::east_one(self.en_passant_bb) & self.color_bb(ep_color.op())
     }
 
     /// Returns a bitboard marking the squares pawns of color `c` can attack
@@ -346,30 +367,7 @@ impl Board {
     /// Returns true if square `s` is attacked by side `by_side`
     /// under pseudo-legal move generation, otherwise false
     fn attacked(&self, s: Square, by_side: Color) -> bool {
-        let pawns = self.piece_bb(Some(by_side), Pawn);
-        if Board::pawn_attacks(s, by_side.op()) & pawns != Bitboard(0) {
-            return true;
-        }
-        let knights = self.piece_bb(Some(by_side), Knight);
-        if Board::knight_attacks(s) & knights != Bitboard(0) {
-            return true;
-        }
-        let king = self.piece_bb(Some(by_side), King);
-        if Board::king_attacks(s) & king != Bitboard(0) {
-            return true;
-        }
-        let bishops_queen = self.piece_bb(Some(by_side), Bishop)
-            | self.piece_bb(Some(by_side), Queen);
-        if self.bishop_attacks(s, None) & bishops_queen != Bitboard(0) {
-            return true;
-        }
-
-        let rooks_queen = self.piece_bb(Some(by_side), Rook)
-            | self.piece_bb(Some(by_side), Queen);
-        if self.rook_attacks(s, None) & rooks_queen != Bitboard(0) {
-            return true;
-        }
-        false
+        (self.attacks_to(s) & self.color_bb(by_side)).occupied()
     }
 
     /// Returns a bitboard marking the squares a rook on `rook_square` attacks
@@ -407,27 +405,20 @@ impl Board {
 
     /// Returns a bitboard marking the pins on color `on_color` with king on
     /// square `king_square`
-    fn pins(&self, on_color: Color) -> Bitboard {
-        let king_bb = self.piece_bb(Some(on_color), King);
-        let king_square: Square = FromPrimitive::from_u32(king_bb.bit_scan().unwrap()).unwrap();
-
+    fn pins(&self, on_color: Color, king_square: Square) -> Bitboard {
         let op_rq = self.piece_bb(Some(on_color.op()), Rook) 
             | self.piece_bb(Some(on_color.op()), Queen);
         let mut pinned: Bitboard = Bitboard(0);
         // xray rook attacks from our king, past our pieces as blockers, 
         // to oponent's pieces
-        let mut pinners = self.xray_rook_attacks(
+        let pinners = self.xray_rook_attacks(
             self.color_bb(on_color), 
             king_square
         ) & op_rq;
         // for each pinner
-        while pinners > Bitboard(0) {
-            // OK to unwrap because by loop guard there is a pinner
-            let sq: Square = FromPrimitive::from_u32(pinners.bit_scan().unwrap()).unwrap();
+        for sq in pinners {
             // The pinned pieces are between the pinners and the king square
             pinned |= Board::in_between(sq, king_square) & self.color_bb(on_color);
-            // Mask out prev pinner
-            pinners &= pinners - Bitboard(1);
         }
 
         // Same thing but for bishop rays
@@ -436,18 +427,14 @@ impl Board {
         let mut pinned: Bitboard = Bitboard(0);
         // xray rook attacks from our king, past our pieces as blockers, 
         // to oponent's pieces
-        let mut pinners = self.xray_bishop_attacks(
+        let pinners = self.xray_bishop_attacks(
             self.color_bb(on_color), 
             king_square
         ) & op_bq;
         // for each pinner
-        while pinners > Bitboard(0) {
-            // OK to unwrap because by loop guard there is a pinner
-            let sq: Square = FromPrimitive::from_u32(pinners.bit_scan().unwrap()).unwrap();
+        for sq in pinners {
             // The pinned pieces are between the pinners and the king square
             pinned |= Board::in_between(sq, king_square) & self.color_bb(on_color);
-            // Mask out prev pinner
-            pinners &= pinners - Bitboard(1);
         }
 
         pinned
@@ -492,6 +479,12 @@ impl Board {
             // empty bitboard has new empty square
             self.empty_bb ^= from_bb; 
         }
+
+        if m.is_pawn_dpush() {
+            self.en_passant_bb = m.get_to().as_bitboard(); 
+        } else {
+            self.en_passant_bb = Bitboard(0);
+        }
     }
 
     /// Returns `Some(p)` if there exists a piece `p` on square `s`,
@@ -499,16 +492,16 @@ impl Board {
     pub fn piece_on_square(&self, s: Square) -> Option<(Piece, Color)> {
         let bb = s.as_bitboard();
 
-        let c = if bb & self.color_bb(White) > Bitboard(0) { 
+        let c = if (bb & self.color_bb(White)).occupied() { 
             White 
-        } else if bb & self.color_bb(Black) > Bitboard(0) { 
+        } else if (bb & self.color_bb(Black)).occupied() { 
             Black 
         } else { 
             return None;
         };
 
         for i in 0..6 {
-            if self.piece_bb[i] & bb > Bitboard(0) {
+            if (self.piece_bb[i] & bb).occupied() {
                 let p = FromPrimitive::from_usize(i).unwrap();
                 return Some((p, c));
             }
@@ -522,7 +515,12 @@ impl Board {
     /// Given the current board state
     pub fn generate_moves(&self, for_color: Color) -> Vec<Cmove> {
         let mut moves = vec![];
-        let pins = self.pins(for_color);
+        let king_bb = self.piece_bb(Some(for_color), King);
+        let king_square: Square = king_bb.bit_scan().unwrap();
+        let attacks_to_king = self.attacks_to(king_square);
+        let checked = attacks_to_king.occupied();
+
+        let pins = self.pins(for_color, king_square);
         let not_pinned = !pins;
         let op_occupied = self.color_bb(for_color.op()); 
 
@@ -536,7 +534,7 @@ impl Board {
             let this_pawn_bb = from_square.as_bitboard();
 
             // If this pawn can be single pushed
-            if can_push & this_pawn_bb > Bitboard(0) {
+            if (can_push & this_pawn_bb).occupied() {
                 let to_dir = match for_color {
                     White => Nort, Black => Sout,
                 };
@@ -546,7 +544,7 @@ impl Board {
             }
 
             // If this pawn can be double pushed
-            if can_dpush & this_pawn_bb > Bitboard(0) {
+            if (can_dpush & this_pawn_bb).occupied() {
                 let to_dir = match for_color {
                     White => Nort, Black => Sout,
                 };
@@ -573,16 +571,12 @@ impl Board {
                     Queen => self.queen_attacks(from_square, None),
                     King => Board::king_attacks(from_square),
                     Pawn => panic!() // Can't happen
-                };
+                } & !self.color_bb(for_color); // Can't move to square with own piece
                 
                 // For every piece this knight attacks
                 for to_square in can_attack {
                     let to_square_bb = to_square.as_bitboard();
-                    // Can't move to a square with our piece
-                    if to_square_bb & self.color_bb(for_color) > Bitboard(0) {
-                        continue;
-                    }
-                    let flag = if to_square_bb & self.occupied_bb > Bitboard(0) {
+                    let flag = if (to_square_bb & self.occupied_bb).occupied() {
                         cmove::CAPTURE
                     } else {
                         cmove::QUIET
@@ -591,7 +585,29 @@ impl Board {
                 }
             }
         }
-
         moves
+    }
+
+    fn out_of_check_moves(
+        &self, king_square: Square, attacks_to_king: Bitboard, for_color: Color
+    ) -> Vec<Cmove> 
+    {
+        // The only way to get out of a double attack is to move the king
+        if attacks_to_king.count() > 1 { 
+            (Board::king_attacks(king_square) & !self.color_bb(for_color))
+                .filter_map(|to| {
+                    // Can't move to our own piece
+                    if self.attacked(to, for_color.op()) {
+                        None
+                    } else if self.piece_on_square(to).is_some() {
+                        Some(Cmove::new(king_square, to, cmove::CAPTURE))
+                    } else {
+                        Some(Cmove::new(king_square, to, cmove::QUIET))
+                    }
+                })
+                .collect()
+        } else {
+            vec![]
+        }
     }
 }

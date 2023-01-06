@@ -94,18 +94,26 @@ impl Bitboard {
     pub fn rotate_right(Bitboard(b): Bitboard, s: u32) -> Bitboard {
         Bitboard(b.rotate_right(s))
     }
-    /// Returns the index of the least significant 1 bit, or None
+    /// Returns the square the least significant 1 bit, or None
     /// if there is no 1 bit
-    pub fn bit_scan(&self) -> Option<u32> {
+    pub fn bit_scan(&self) -> Option<Square> {
         let trailing_zeros = self.0.trailing_zeros();
-        if trailing_zeros == 64 { None } else { Some(trailing_zeros) }
+        if trailing_zeros == 64 { None } else { Some(FromPrimitive::from_u32(trailing_zeros).unwrap()) }
     }
 
-    /// Returns the index of the most significant 1 bit, or None
+    /// Returns the square of the most significant 1 bit, or None
     /// if there is no 1 bit
-    pub fn bit_scan_reverse(&self) -> Option<u32> {
+    pub fn bit_scan_reverse(&self) -> Option<Square> {
         let leading_zeros = self.0.leading_zeros();
-        if leading_zeros == 64 { None } else { Some(leading_zeros ^ 63) }
+        if leading_zeros == 64 { None } else { Some(FromPrimitive::from_u32(leading_zeros ^ 63).unwrap()) }
+    }
+
+    pub fn empty(&self) -> bool {
+        self.0 == 0
+    }
+
+    pub fn occupied(&self) -> bool {
+        self.0 != 0
     }
 }
 
@@ -136,7 +144,7 @@ impl Iterator for Bitboard {
         if *self == Bitboard(0) {
             return None;
         }
-        let next_square: Square = FromPrimitive::from_u32(self.bit_scan().unwrap()).unwrap();
+        let next_square: Square = self.bit_scan().unwrap();
         *self &= *self - Bitboard(1);
         Some(next_square)
     }

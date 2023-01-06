@@ -48,4 +48,12 @@ impl Cmove {
     pub fn is_capture(&self) -> bool {
         self.0 & CAPTURE != 0
     }
+
+    pub fn is_ep_capture(&self) -> bool {
+        self.0 == EP_CAPTURE
+    }
+
+    pub fn is_pawn_dpush(&self) -> bool {
+        self.0 == PAWN_DPUSH
+    }
 }
