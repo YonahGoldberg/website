@@ -3,6 +3,7 @@ mod cmove;
 use bitboard::Bitboard;
 use num::FromPrimitive;
 use cmove::Cmove;
+use std::iter::{self, Map};
 
 /// The colors of pieces
 use Color::*;
@@ -183,24 +184,6 @@ impl Board {
         }
     }
 
-    fn pawn_can_ep_east(&self) -> Bitboard {
-        let ep_square = match self.en_passant_bb.bit_scan() {
-            Some(s) => s,
-            None => return Bitboard(0),
-        };
-        let (_, ep_color) = self.piece_on_square(ep_square).unwrap();
-        Bitboard::west_one(self.en_passant_bb) & self.color_bb(ep_color.op())
-    }
-
-    fn pawn_can_ep_west(&self) -> Bitboard {
-        let ep_square = match self.en_passant_bb.bit_scan() {
-            Some(s) => s,
-            None => return Bitboard(0),
-        };
-        let (_, ep_color) = self.piece_on_square(ep_square).unwrap();
-        Bitboard::east_one(self.en_passant_bb) & self.color_bb(ep_color.op())
-    }
-
     /// Returns a bitboard marking the squares pawns of color `c` can attack
     /// to the east under pseudo-legal move generation
     fn pawn_east_attack_squares(&self, c: Color) -> Bitboard {
@@ -355,19 +338,14 @@ impl Board {
 
     /// Returns a bitboard marking squares with pieces present that
     /// attack square `s` under pseudo-legal move generation
-    fn attacks_to(&self, s: Square) -> Bitboard {
-        Board::pawn_attacks(s, White) & self.piece_bb(Some(Black), Pawn) |
-        Board::pawn_attacks(s, Black) & self.piece_bb(Some(White), Pawn) |
-        Board::knight_attacks(s) & self.piece_bb(None, Knight) |
-        Board::king_attacks(s) & self.piece_bb(None, King) |
-        self.bishop_attacks(s, None) & (self.piece_bb(None, Bishop) | self.piece_bb(None, Queen)) |
-        self.rook_attacks(s, None) & (self.piece_bb(None, Rook) | self.piece_bb(None, Queen))
-    }
-
-    /// Returns true if square `s` is attacked by side `by_side`
-    /// under pseudo-legal move generation, otherwise false
-    fn attacked(&self, s: Square, by_side: Color) -> bool {
-        (self.attacks_to(s) & self.color_bb(by_side)).occupied()
+    fn attacks_to(&self, s: Square, by_color: Color) -> Bitboard {
+        self.color_bb(by_color) & (
+            Board::pawn_attacks(s, by_color.op()) & self.piece_bb(None, Pawn) |
+            Board::knight_attacks(s) & self.piece_bb(None, Knight) |
+            Board::king_attacks(s) & self.piece_bb(None, King) |
+            self.bishop_attacks(s, None) & (self.piece_bb(None, Bishop) | self.piece_bb(None, Queen)) |
+            self.rook_attacks(s, None) & (self.piece_bb(None, Rook) | self.piece_bb(None, Queen))
+        )
     }
 
     /// Returns a bitboard marking the squares a rook on `rook_square` attacks
@@ -517,7 +495,7 @@ impl Board {
         let mut moves = vec![];
         let king_bb = self.piece_bb(Some(for_color), King);
         let king_square: Square = king_bb.bit_scan().unwrap();
-        let attacks_to_king = self.attacks_to(king_square);
+        let attacks_to_king = self.attacks_to(king_square, for_color.op());
         let checked = attacks_to_king.occupied();
 
         let pins = self.pins(for_color, king_square);
@@ -589,25 +567,67 @@ impl Board {
     }
 
     fn out_of_check_moves(
-        &self, king_square: Square, attacks_to_king: Bitboard, for_color: Color
+        &self, 
+        king_square: Square, 
+        attacks_to_king: Bitboard, 
+        for_color: Color,
+        pinned: Bitboard,
     ) -> Vec<Cmove> 
     {
-        // The only way to get out of a double attack is to move the king
-        if attacks_to_king.count() > 1 { 
-            (Board::king_attacks(king_square) & !self.color_bb(for_color))
-                .filter_map(|to| {
-                    // Can't move to our own piece
-                    if self.attacked(to, for_color.op()) {
-                        None
-                    } else if self.piece_on_square(to).is_some() {
-                        Some(Cmove::new(king_square, to, cmove::CAPTURE))
-                    } else {
-                        Some(Cmove::new(king_square, to, cmove::QUIET))
-                    }
-                })
-                .collect()
-        } else {
-            vec![]
+        // King moves
+        let king_moves = (Board::king_attacks(king_square) & !self.color_bb(for_color))
+            .filter_map(|to| {
+                // Op piece attacks this square
+                if self.attacks_to(to, for_color.op()).occupied() {
+                    None
+                } else if self.piece_on_square(to).is_some() {
+                    Some(Cmove::new(king_square, to, cmove::CAPTURE))
+                } else {
+                    Some(Cmove::new(king_square, to, cmove::QUIET))
+                }
+            });
+        
+        // only king moves can get out of double check
+        if attacks_to_king.count() > 1 {
+            return king_moves.collect();
         }
+
+        let attacker = attacks_to_king.bit_scan().unwrap();
+        // The pieces that can capture attacker
+        let can_capture = self.attacks_to(attacker, for_color) & !pinned;
+        let capture_moves = can_capture
+            .map(|from| {
+                Cmove::new(from, attacker, cmove::CAPTURE)
+            });
+        
+        // If the attack was the result of a dpush, we can en passant
+        let dpush_attack = attacks_to_king & self.en_passant_bb;
+        let pawn_bb = self.piece_bb(Some(for_color), Pawn);
+
+        // If our pawn lies to the east of the dpush pawn, we en passant west
+        let ep_capture_west_move = (Bitboard::east_one(dpush_attack) & pawn_bb)
+            .map(|from| {
+                let to = match for_color {
+                    White => from.translate(Nowe, 1),
+                    Black => from.translate(Sowe, 1),
+                }.unwrap();
+                Cmove::new(from, to, cmove::EP_CAPTURE)
+            });
+
+        // If our pawn lies to the west of the dpush pawn, we en passant east
+        let ep_capture_east_move = (Bitboard::west_one(dpush_attack) & pawn_bb)
+            .map(|from| {
+                let to = match for_color {
+                    White => from.translate(Nowe, 1),
+                    Black => from.translate(Sowe, 1),
+                }.unwrap();
+                Cmove::new(from, to, cmove::EP_CAPTURE)
+            });
+        
+        king_moves
+            .chain(capture_moves)
+            .chain(ep_capture_east_move)
+            .chain(ep_capture_west_move)
+            .collect()
     }
 }
