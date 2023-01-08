@@ -492,78 +492,45 @@ impl Board {
     /// Generates a list of moves for color `for_color`
     /// Given the current board state
     pub fn generate_moves(&self, for_color: Color) -> Vec<Cmove> {
-        let mut moves = vec![];
         let king_bb = self.piece_bb(Some(for_color), King);
         let king_square: Square = king_bb.bit_scan().unwrap();
         let attacks_to_king = self.attacks_to(king_square, for_color.op());
         let checked = attacks_to_king.occupied();
+        let not_pinned = !self.pins(for_color, king_square);
 
-        let pins = self.pins(for_color, king_square);
-        let not_pinned = !pins;
-        let op_occupied = self.color_bb(for_color.op()); 
+        if checked {
+            self.out_of_check_moves(king_square, attacks_to_king, for_color, not_pinned)
+        } else {
+            let pawn_moves = self.pawn_moves(for_color, not_pinned);
+            (1..6)
+            .map(|i| FromPrimitive::from_i32(i).unwrap())
+            .flat_map(|piece| {
+                let piece_bb = self.piece_bb(Some(for_color), piece);
+                piece_bb.flat_map(|from| {
+                    let can_attack = match piece {
+                        Knight => Board::knight_attacks(from),
+                        Bishop => self.bishop_attacks(from, None),
+                        Rook => self.rook_attacks(from, None),
+                        Queen => self.queen_attacks(from, None),
+                        King => Board::king_attacks(from),
+                        Pawn => panic!() // Can't happen
+                    } & !self.color_bb(for_color); // Can't move to square with own piece
 
-        let pawn_bb = self.piece_bb(Some(for_color), Pawn) & not_pinned;
-        let can_push = self.pawns_can_push(for_color);
-        let can_dpush = self.pawns_can_dpush(for_color);
-        
-        // For every pawn
-        for from_square in pawn_bb {
-            let can_attack = Board::pawn_attacks(from_square, for_color) & op_occupied;
-            let this_pawn_bb = from_square.as_bitboard();
-
-            // If this pawn can be single pushed
-            if (can_push & this_pawn_bb).occupied() {
-                let to_dir = match for_color {
-                    White => Nort, Black => Sout,
-                };
-                // We can unwrap since we know this pawn can be pushed
-                let to_square = from_square.translate(to_dir, 1).unwrap();
-                moves.push(Cmove::new(from_square, to_square, cmove::QUIET));
-            }
-
-            // If this pawn can be double pushed
-            if (can_dpush & this_pawn_bb).occupied() {
-                let to_dir = match for_color {
-                    White => Nort, Black => Sout,
-                };
-                // We can unwrap since we know this pawn can be pushed
-                let to_square = from_square.translate(to_dir, 2).unwrap();
-                moves.push(Cmove::new(from_square, to_square, cmove::PAWN_DPUSH));
-            }
-            
-            // For every piece this pawn attacks
-            for to_square in can_attack {
-                moves.push(Cmove::new(from_square, to_square, cmove::CAPTURE));
-            }
+                    can_attack.map(move |to| {
+                        let to_square_bb = to.as_bitboard();
+                        let flag = if (to_square_bb & self.occupied_bb).occupied() {
+                            cmove::CAPTURE
+                        } else {
+                            cmove::QUIET
+                        };
+                        Cmove::new(from, to, flag) 
+                    })
+                })
+                .collect::<Vec<Cmove>>()
+            })
+            .chain(pawn_moves)
+            .collect()
         }
-
-        // For every other piece
-        for piece in (1..6).map(|i| -> Piece { FromPrimitive::from_i32(i).unwrap() }) {
-            let piece_bb = self.piece_bb(Some(for_color), piece);
-            // For every piece of that type 
-            for from_square in piece_bb {
-                let can_attack = match piece {
-                    Knight => Board::knight_attacks(from_square),
-                    Bishop => self.bishop_attacks(from_square, None),
-                    Rook => self.rook_attacks(from_square, None),
-                    Queen => self.queen_attacks(from_square, None),
-                    King => Board::king_attacks(from_square),
-                    Pawn => panic!() // Can't happen
-                } & !self.color_bb(for_color); // Can't move to square with own piece
-                
-                // For every piece this knight attacks
-                for to_square in can_attack {
-                    let to_square_bb = to_square.as_bitboard();
-                    let flag = if (to_square_bb & self.occupied_bb).occupied() {
-                        cmove::CAPTURE
-                    } else {
-                        cmove::QUIET
-                    };
-                    moves.push(Cmove::new(from_square, to_square, flag)); 
-                }
-            }
-        }
-        moves
     }
 
     fn out_of_check_moves(
@@ -571,13 +538,16 @@ impl Board {
         king_square: Square, 
         attacks_to_king: Bitboard, 
         for_color: Color,
-        pinned: Bitboard,
+        not_pinned: Bitboard,
     ) -> Vec<Cmove> 
     {
-        // King moves
-        let king_moves = (Board::king_attacks(king_square) & !self.color_bb(for_color))
+        let king_attacks = Board::king_attacks(king_square);
+        // Can't move king to square with our own piece
+        let not_to_own_piece = king_attacks & !self.color_bb(for_color);
+        // Iterator over all king moves
+        let king_moves = not_to_own_piece
             .filter_map(|to| {
-                // Op piece attacks this square
+                // Can't move to a square op attacks
                 if self.attacks_to(to, for_color.op()).occupied() {
                     None
                 } else if self.piece_on_square(to).is_some() {
@@ -589,45 +559,103 @@ impl Board {
         
         // only king moves can get out of double check
         if attacks_to_king.count() > 1 {
-            return king_moves.collect();
+            king_moves.collect()
+        } else {
+            // Only one attacker
+            let attacker = attacks_to_king.bit_scan().unwrap();
+            // The pieces that can capture attacker (can't be pinned)
+            let can_capture = self.attacks_to(attacker, for_color) & not_pinned;
+            let capture_moves = can_capture
+                .map(|from| {
+                    Cmove::new(from, attacker, cmove::CAPTURE)
+                });
+            
+            // If the attack was the result of a dpush, we can en passant
+            let dpush_king_attack = attacks_to_king & self.en_passant_bb;
+            // No en passant capture possable
+            if dpush_king_attack.empty() {
+                king_moves.chain(capture_moves).collect()
+            } else {
+                let pawns_not_pinned = self.piece_bb(Some(for_color), Pawn) & not_pinned;
+                let ep_moves = Self::ep_moves(for_color, pawns_not_pinned, dpush_king_attack);
+                king_moves.chain(capture_moves).chain(ep_moves).collect()
+            }
         }
+    }
 
-        let attacker = attacks_to_king.bit_scan().unwrap();
-        // The pieces that can capture attacker
-        let can_capture = self.attacks_to(attacker, for_color) & !pinned;
-        let capture_moves = can_capture
-            .map(|from| {
-                Cmove::new(from, attacker, cmove::CAPTURE)
-            });
+    fn pawn_moves(&self, for_color: Color, pinned: Bitboard) -> Vec<Cmove> {
+        let op_occupied = self.color_bb(for_color.op()); 
+        let pawn_bb = self.piece_bb(Some(for_color), Pawn) & !pinned;
+        let can_push = self.pawns_can_push(for_color);
+        let can_dpush = self.pawns_can_dpush(for_color);
         
-        // If the attack was the result of a dpush, we can en passant
-        let dpush_attack = attacks_to_king & self.en_passant_bb;
-        let pawn_bb = self.piece_bb(Some(for_color), Pawn);
+        // For every pawn
+        let regular_moves = pawn_bb.map(|from| {
+            let mut moves = vec![];
+            let can_attack = Board::pawn_attacks(from, for_color) & op_occupied;
+            let this_pawn_bb = from.as_bitboard();
 
-        // If our pawn lies to the east of the dpush pawn, we en passant west
-        let ep_capture_west_move = (Bitboard::east_one(dpush_attack) & pawn_bb)
-            .map(|from| {
-                let to = match for_color {
-                    White => from.translate(Nowe, 1),
-                    Black => from.translate(Sowe, 1),
-                }.unwrap();
-                Cmove::new(from, to, cmove::EP_CAPTURE)
-            });
+            // If this pawn can be single pushed
+            if (can_push & this_pawn_bb).occupied() {
+                let to_dir = match for_color {
+                    White => Nort, Black => Sout,
+                };
+                // We can unwrap since we know this pawn can be pushed
+                let to = from.translate(to_dir, 1).unwrap();
+                moves.push(Cmove::new(from, to, cmove::QUIET));
+            }
 
-        // If our pawn lies to the west of the dpush pawn, we en passant east
-        let ep_capture_east_move = (Bitboard::west_one(dpush_attack) & pawn_bb)
-            .map(|from| {
-                let to = match for_color {
-                    White => from.translate(Nowe, 1),
-                    Black => from.translate(Sowe, 1),
-                }.unwrap();
-                Cmove::new(from, to, cmove::EP_CAPTURE)
+            // If this pawn can be double pushed
+            if (can_dpush & this_pawn_bb).occupied() {
+                let to_dir = match for_color {
+                    White => Nort, Black => Sout,
+                };
+                // We can unwrap since we know this pawn can be pushed
+                let to = from.translate(to_dir, 2).unwrap();
+                moves.push(Cmove::new(from, to, cmove::PAWN_DPUSH));
+            }
+            
+            // For every piece this pawn attacks
+            can_attack.for_each(|to| {
+                moves.push(Cmove::new(from, to, cmove::CAPTURE))
             });
-        
-        king_moves
-            .chain(capture_moves)
-            .chain(ep_capture_east_move)
-            .chain(ep_capture_west_move)
-            .collect()
+            moves
+        })
+        .flatten();
+
+        let ep_moves = Self::ep_moves(for_color, pawn_bb, self.en_passant_bb);
+        regular_moves.chain(ep_moves).collect()
+    }
+
+    fn ep_moves(
+        for_color: Color,
+        with_pawns: Bitboard, 
+        pawn_dpushed: Bitboard, 
+    ) -> Vec<Cmove> 
+    {
+        let mut moves = vec![];
+        // If our pawn lies to the east of the dpushed pawn, we en passant west
+        let ep_capture_west_pawn = Bitboard::east_one(pawn_dpushed) & with_pawns;
+        // If our pawn lies to the west of the dpushed pawn, we en passant west
+        let ep_capture_east_pawn = Bitboard::west_one(pawn_dpushed) & with_pawns;
+        // We can en passant west
+        if ep_capture_west_pawn.occupied() {
+            let from = ep_capture_west_pawn.bit_scan().unwrap();
+            let to = match for_color {
+                White => from.translate(Nowe, 1),
+                Black => from.translate(Sowe, 1),
+            }.unwrap();
+            moves.push(Cmove::new(from, to, cmove::EP_CAPTURE));
+        }
+        // We can en passant east 
+        if ep_capture_east_pawn.occupied() {
+            let from = ep_capture_west_pawn.bit_scan().unwrap();
+            let to = match for_color {
+                White => from.translate(Noea, 1),
+                Black => from.translate(Soea, 1),
+            }.unwrap();
+            moves.push(Cmove::new(from, to, cmove::EP_CAPTURE));
+        }
+        moves
     }
 }
