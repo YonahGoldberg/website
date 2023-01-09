@@ -501,35 +501,12 @@ impl Board {
         if checked {
             self.out_of_check_moves(king_square, attacks_to_king, for_color, not_pinned)
         } else {
-            let pawn_moves = self.pawn_moves(for_color, not_pinned);
-            (1..6)
-            .map(|i| FromPrimitive::from_i32(i).unwrap())
-            .flat_map(|piece| {
-                let piece_bb = self.piece_bb(Some(for_color), piece);
-                piece_bb.flat_map(|from| {
-                    let can_attack = match piece {
-                        Knight => Board::knight_attacks(from),
-                        Bishop => self.bishop_attacks(from, None),
-                        Rook => self.rook_attacks(from, None),
-                        Queen => self.queen_attacks(from, None),
-                        King => Board::king_attacks(from),
-                        Pawn => panic!() // Can't happen
-                    } & !self.color_bb(for_color); // Can't move to square with own piece
-
-                    can_attack.map(move |to| {
-                        let to_square_bb = to.as_bitboard();
-                        let flag = if (to_square_bb & self.occupied_bb).occupied() {
-                            cmove::CAPTURE
-                        } else {
-                            cmove::QUIET
-                        };
-                        Cmove::new(from, to, flag) 
-                    })
+            (0..6)
+                .map(|i| FromPrimitive::from_i32(i).unwrap())
+                .flat_map(|piece| {
+                    self.generate_piece_moves(piece, for_color, not_pinned)
                 })
-                .collect::<Vec<Cmove>>()
-            })
-            .chain(pawn_moves)
-            .collect()
+                .collect()
         }
     }
 
@@ -583,14 +560,44 @@ impl Board {
         }
     }
 
-    fn pawn_moves(&self, for_color: Color, pinned: Bitboard) -> Vec<Cmove> {
+    fn generate_piece_moves(&self, for_piece: Piece, for_color: Color, not_pinned: Bitboard) -> Vec<Cmove> {
+        if let Pawn = for_piece {
+            self.generate_pawn_moves(for_color, not_pinned)
+        } else {
+            let piece_bb = self.piece_bb(Some(for_color), for_piece); 
+            
+            piece_bb.flat_map(|from| {
+                let can_attack = match for_piece {
+                    Knight => Board::knight_attacks(from),
+                    Bishop => self.bishop_attacks(from, None),
+                    Rook => self.rook_attacks(from, None),
+                    Queen => self.queen_attacks(from, None),
+                    King => Board::king_attacks(from),
+                    Pawn => panic!() // Can't happen
+                } & !self.color_bb(for_color); // Can't move to square with own piece
+
+                can_attack.map(move |to| {
+                    let to_square_bb = to.as_bitboard();
+                    let flag = if (to_square_bb & self.occupied_bb).occupied() {
+                        cmove::CAPTURE
+                    } else {
+                        cmove::QUIET
+                    };
+                    Cmove::new(from, to, flag) 
+                })
+            })
+            .collect()
+        }
+    }
+
+    fn generate_pawn_moves(&self, for_color: Color, not_pinned: Bitboard) -> Vec<Cmove> {
         let op_occupied = self.color_bb(for_color.op()); 
-        let pawn_bb = self.piece_bb(Some(for_color), Pawn) & !pinned;
+        let pawn_bb = self.piece_bb(Some(for_color), Pawn) & not_pinned;
         let can_push = self.pawns_can_push(for_color);
         let can_dpush = self.pawns_can_dpush(for_color);
         
         // For every pawn
-        let regular_moves = pawn_bb.map(|from| {
+        let regular_moves = pawn_bb.flat_map(|from| {
             let mut moves = vec![];
             let can_attack = Board::pawn_attacks(from, for_color) & op_occupied;
             let this_pawn_bb = from.as_bitboard();
@@ -620,19 +627,13 @@ impl Board {
                 moves.push(Cmove::new(from, to, cmove::CAPTURE))
             });
             moves
-        })
-        .flatten();
+        });
 
         let ep_moves = Self::ep_moves(for_color, pawn_bb, self.en_passant_bb);
         regular_moves.chain(ep_moves).collect()
     }
 
-    fn ep_moves(
-        for_color: Color,
-        with_pawns: Bitboard, 
-        pawn_dpushed: Bitboard, 
-    ) -> Vec<Cmove> 
-    {
+    fn ep_moves(for_color: Color, with_pawns: Bitboard, pawn_dpushed: Bitboard) -> Vec<Cmove> {
         let mut moves = vec![];
         // If our pawn lies to the east of the dpushed pawn, we en passant west
         let ep_capture_west_pawn = Bitboard::east_one(pawn_dpushed) & with_pawns;
