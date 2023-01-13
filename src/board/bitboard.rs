@@ -11,13 +11,14 @@
 
 pub mod tables;
 pub use tables::*;
-use super::Square;
+use super::{Square, Piece};
 use num::FromPrimitive;
 use std::ops::{
     BitAnd, BitAndAssign, BitOr, 
     BitOrAssign, BitXor, BitXorAssign, 
     Shl, ShlAssign, Shr, ShrAssign, Not,
-    Sub, Add, SubAssign, AddAssign,
+    Sub, Add, SubAssign, AddAssign, Index, IndexMut,
+    Deref, DerefMut,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]

@@ -103,6 +103,7 @@ pub struct Board {
     empty_bb: Bitboard,
     occupied_bb: Bitboard,
     en_passant_bb: Bitboard,
+    fifty_move_rule_counter: u8,
 }
 
 impl Board {
@@ -123,6 +124,7 @@ impl Board {
             empty_bb: bitboard::EMPTY_START,
             occupied_bb: bitboard::OCCUPIED_START,
             en_passant_bb: Bitboard(0),
+            fifty_move_rule_counter: 0
         }
     }
 
@@ -421,6 +423,7 @@ impl Board {
     /// Makes the move `m`, updating this board's internal state
     /// This function assumes `m` is a valid move
     pub fn make_move_mut(&mut self, m: Cmove) {
+        let promo_piece = m.is_promo();
         // a one on the from square, else zeroes
         let from_bb = m.get_from().as_bitboard();
         // a one on the to square, else zeroes
@@ -431,6 +434,7 @@ impl Board {
         let (piece, color) = self.piece_on_square(m.get_from()).unwrap();
 
         if m.is_capture() {
+            self.fifty_move_rule_counter = 0;
             // If captured piece is different than piece, this is correct,
             // otherwise the to square will be set to 0 instead of 1
             self.piece_bb[piece as usize] ^= from_to_bb;
@@ -441,6 +445,13 @@ impl Board {
             // If captured piece is different than piece, we update
             // captured piece bitboard normally, otherwise we flip the bit that was incorrect
             self.piece_bb[captured_piece as usize] ^= to_bb;
+            
+            // Promote the piece
+            if let Some(promo_piece) = promo_piece {
+                self.piece_bb[piece as usize] ^= to_bb;
+                self.piece_bb[promo_piece as usize] ^= to_bb;
+            }
+
             // update captured color bitboard
             self.piece_bb[6 + captured_color as usize] ^= to_bb;
             // occupied bitboard has new empty square
@@ -448,8 +459,22 @@ impl Board {
             // empty bitboard has new empty square
             self.empty_bb ^= from_bb;
         } else {
-            // update piece bitboard
-            self.piece_bb[piece as usize] ^= from_to_bb;
+            // This is a promotion
+            if let Some(promo_piece) = promo_piece {
+                // Update prev piece bitboard
+                self.piece_bb[piece as usize] ^= from_bb;
+                // Updated promo piece bitboard
+                self.piece_bb[promo_piece as usize] ^= to_bb;
+            } else {
+                // update piece bitboard
+                self.piece_bb[piece as usize] ^= from_to_bb;
+            }
+            
+            if let Pawn = piece {
+                self.fifty_move_rule_counter = 0;
+            } else {
+                self.fifty_move_rule_counter += 1;
+            }
             // update color bitboard
             self.piece_bb[6 + color as usize] ^= from_to_bb;
             // occupied bitboard has new empty square
@@ -492,6 +517,10 @@ impl Board {
     /// Generates a list of moves for color `for_color`
     /// Given the current board state
     pub fn generate_moves(&self, for_color: Color) -> Vec<Cmove> {
+        if self.fifty_move_rule_counter >= 50 {
+            return vec![];
+        }
+        
         let king_bb = self.piece_bb(Some(for_color), King);
         let king_square: Square = king_bb.bit_scan().unwrap();
         let attacks_to_king = self.attacks_to(king_square, for_color.op());
