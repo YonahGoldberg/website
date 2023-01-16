@@ -7,3 +7,4 @@
 extern crate num_derive;
 extern crate num;
 pub mod board;
+pub mod engine;

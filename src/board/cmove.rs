@@ -16,12 +16,12 @@ pub const KNIGHT_PROMO_CAPTURE: u16 = 12;
 pub const BISHOP_PROMO_CAPTURE: u16 = 13;
 pub const ROOK_PROMO_CAPTURE: u16 = 14;
 pub const QUEEN_PROMO_CAPTURE: u16 = 15;
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub struct Cmove(u16);
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct CMove(u16);
 
-impl Cmove {
-    pub fn new(from: Square, to: Square, flags: u16) -> Cmove {
-        Cmove(((flags & 0xf) << 12) | ((from as u16) << 6) | (to as u16))
+impl CMove {
+    pub fn new(from: Square, to: Square, flags: u16) -> CMove {
+        CMove(((flags & 0xf) << 12) | ((from as u16) << 6) | (to as u16))
     }
 
     pub fn get_from(&self) -> Square {
@@ -71,5 +71,13 @@ impl Cmove {
         } else {
             None
         }
+    }
+
+    pub fn is_king_castle(&self) -> bool {
+        self.0 == KING_CASTLE
+    }
+
+    pub fn is_queen_castle(&self) -> bool {
+        self.0 == QUEEN_CASTLE
     }
 }
