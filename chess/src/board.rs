@@ -1,93 +1,3 @@
-pub mod bitboard;
-pub mod cmove;
-use bitboard::Bitboard;
-use num::FromPrimitive;
-use cmove::CMove;
-
-/// The colors of pieces
-use Color::*;
-#[derive(Clone, Copy, FromPrimitive, Debug)]
-pub enum Color {
-    White,
-    Black,
-}
-
-impl Color {
-    pub fn op(&self) -> Color {
-        match self {
-            White => Black,
-            Black => White,
-        }
-    }
-}
-
-/// All chess piece types
-use Piece::*;
-#[derive(Clone, Copy, FromPrimitive, Debug)]
-pub enum Piece {
-    Pawn, Knight, Bishop, Rook, Queen, King,
-}
-
-pub struct CPiece(Piece, Color);
-
-/// All eight cardinal directions
-use Dir::*;
-#[derive(Clone, Copy, FromPrimitive, Debug)]
-pub enum Dir {
-    Nort, Noea, East, Soea, Sout, Sowe, West, Nowe,
-}
-
-impl Dir {
-    pub fn neg(&self) -> bool {
-        match *self {
-            West | Sout | Sowe | Soea => true,
-            _ => false,
-        }
-    }
-
-    pub fn pos(&self) -> bool {
-        match *self {
-            West | Sout | Sowe | Soea => false,
-            _ => true,
-        }
-    }
-}
-
-/// All squares on a chess board
-use Square::*;
-#[derive(Clone, Copy, FromPrimitive, Debug)]
-pub enum Square {
-    A1, B1, C1, D1, E1, F1, G1, H1,
-    A2, B2, C2, D2, E2, F2, G2, H2,
-    A3, B3, C3, D3, E3, F3, G3, H3,
-    A4, B4, C4, D4, E4, F4, G4, H4,
-    A5, B5, C5, D5, E5, F5, G5, H5,
-    A6, B6, C6, D6, E6, F6, G6, H6,
-    A7, B7, C7, D7, E7, F7, G7, H7,
-    A8, B8, C8, D8, E8, F8, G8, H8,
-}
-
-impl Square {
-    /// Returns a bitboard with a one set on this square and
-    /// zeroes everywhere else
-    fn as_bitboard(&self) -> Bitboard {
-        Bitboard(1) << *self as i32
-    }
-
-    /// Returns `Some(s)` if there exists a square `s` `steps` steps
-    /// away from this square in direction `dir`, otherwise `None`.
-    /// Moving east nine is equivalent to moving north one and moving
-    /// west 9 is equivalent to moving south one, and so on so that
-    /// east and west rap around until they can't anymore.
-    fn translate(&self, dir: Dir, steps: i32) -> Option<Square> {
-        let amount = match dir {
-            Nort => 8, Noea => 9, East => 1, Soea => -7,
-            Sout => -8, Sowe => -9, West => -1, Nowe => 7,
-        };
-        FromPrimitive::from_i32(*self as i32 + amount * steps)
-    }
-}
-
 /// The main `Board` struct, which contains 11 bitboards, a fifty move rule
 /// counter, and castling rights
 ///
@@ -107,6 +17,16 @@ impl Square {
 /// pawn move or capture, the game is an automatic draw
 /// * `castling_rights` - starting from LSB, marks whether castling is possible on
 /// white king-side, white queen-side, black king-side, black queen-side
+
+use super::bitboard::{self, Bitboard};
+use super::tables;
+use super::utils::{CPiece, Color, Dir, Square, Piece};
+use super::cmove::{self, CMove};
+use Piece::*;
+use Color::*;
+use Dir::*;
+use num_traits::FromPrimitive;
+
 pub struct Board {
     piece_bb: [Bitboard; 8],
     empty_bb: Bitboard,
@@ -115,13 +35,13 @@ pub struct Board {
     fifty_move_rule_counter: u8,
     castling_rights: u8,
 }
+// Constants for masking out castling rights
+const WKING_SIDE_MASK: u8 = 1;
+const WQUEEN_SIDE_MASK: u8 = 2;
+const BKING_SIDE_MASK: u8 = 4;
+const BQUEEN_SIDE_MASK: u8 = 8;
 
 impl Board {
-    // Constants for masking out castling rights
-    const WKING_SIDE_MASK: u8 = 1;
-    const WQUEEN_SIDE_MASK: u8 = 2;
-    const BKING_SIDE_MASK: u8 = 4;
-    const BQUEEN_SIDE_MASK: u8 = 8;
     /// Creates a new Bitboard struct with beginning piece
     /// placements for each bitboard
     pub fn new() -> Board {
@@ -276,8 +196,8 @@ impl Board {
     /// more pawns attacking than their oponent
     fn pawn_safe_sqares(&self, c: Color) -> Bitboard {
         self.pawn_dbl_attack_squares(c) | 
-        !self.pawn_attack_squares(c.op()) | 
-        (self.pawn_single_attack_squares(c) & !self.pawn_dbl_attack_squares(c.op()))
+        !self.pawn_attack_squares(!c) | 
+        (self.pawn_single_attack_squares(c) & !self.pawn_dbl_attack_squares(!c))
     }
 
     /// Returns a bitboard marking the pawns of color `c` that
@@ -305,7 +225,7 @@ impl Board {
     /// Returns a bitboard marking the pawns of color `c` that
     /// can capture another pawn in any direction under pseudo-legal move generation
     fn pawns_can_capture_pawn(&self, c: Color) -> Bitboard {
-        self.piece_bb(Some(c), Pawn) & self.pawn_attack_squares(c.op())
+        self.piece_bb(Some(c), Pawn) & self.pawn_attack_squares(!c)
     }
 
     /// Returns a bitboard marking ray attacks in direction `d` from
@@ -316,11 +236,11 @@ impl Board {
             Some(b) => b,
             None => self.occupied_bb,
         };
-        let mut attacks = bitboard::RAY_ATTACKS[d as usize][s as usize];
+        let mut attacks = tables::RAY_ATTACKS[d as usize][s as usize];
         let blocking = attacks & occupied_bb;
         let blocker = if d.pos() { blocking.bit_scan() } else { blocking.bit_scan_reverse() };
         if let Some(blocker) = blocker {
-            attacks ^= bitboard::RAY_ATTACKS[d as usize][blocker as usize];
+            attacks ^= tables::RAY_ATTACKS[d as usize][blocker as usize];
         }
         attacks
     }
@@ -370,26 +290,26 @@ impl Board {
     /// Returns a bitboard marking pawn attacks
     /// from square `s` of a pawn of color `c` under pseudo-legal move generation
     fn pawn_attacks(s: Square, c: Color) -> Bitboard {
-        bitboard::PAWN_ATTACKS[c as usize][s as usize]
+        tables::PAWN_ATTACKS[c as usize][s as usize]
     }
 
     /// Returns a bitboard marking knight attacks
     /// from square `s` under pseudo-legal move generation
     fn knight_attacks(s: Square) -> Bitboard {
-        bitboard::KNIGHT_ATTACKS[s as usize]
+        tables::KNIGHT_ATTACKS[s as usize]
     }
 
     /// Returns a bitboard marking king attacks
     /// from square `s` under pseudo-legal move generation
     fn king_attacks(s: Square) -> Bitboard {
-        bitboard::KING_ATTACKS[s as usize]
+        tables::KING_ATTACKS[s as usize]
     }
 
     /// Returns a bitboard marking squares with pieces present that
     /// attack square `s` under pseudo-legal move generation
     fn attacks_to(&self, s: Square, by_color: Color) -> Bitboard {
         self.color_bb(by_color) & (
-            Board::pawn_attacks(s, by_color.op()) & self.piece_bb(None, Pawn) |
+            Board::pawn_attacks(s, !by_color) & self.piece_bb(None, Pawn) |
             Board::knight_attacks(s) & self.piece_bb(None, Knight) |
             Board::king_attacks(s) & self.piece_bb(None, King) |
             self.bishop_attacks(s, None) & (self.piece_bb(None, Bishop) | self.piece_bb(None, Queen)) |
@@ -427,14 +347,14 @@ impl Board {
     /// a ray in one of the eight cardinal directions. Returns an empty bitboard
     /// if `from` and `to` are not along a cardinal direction.
     fn in_between(from: Square, to: Square) -> Bitboard {
-        bitboard::IN_BETWEEN[from as usize][to as usize]
+        tables::IN_BETWEEN[from as usize][to as usize]
     }
 
     /// Returns a bitboard marking the pins on color `on_color` with king on
     /// square `king_square`
     fn pins(&self, on_color: Color, king_square: Square) -> Bitboard {
-        let op_rq = self.piece_bb(Some(on_color.op()), Rook) 
-            | self.piece_bb(Some(on_color.op()), Queen);
+        let op_rq = self.piece_bb(Some(!on_color), Rook) 
+            | self.piece_bb(Some(!on_color), Queen);
         let mut pinned: Bitboard = Bitboard(0);
         // xray rook attacks from our king, past our pieces as blockers, 
         // to oponent's pieces
@@ -449,8 +369,8 @@ impl Board {
         }
 
         // Same thing but for bishop rays
-        let op_bq = self.piece_bb(Some(on_color.op()), Bishop) 
-            | self.piece_bb(Some(on_color.op()), Queen);
+        let op_bq = self.piece_bb(Some(!on_color), Bishop) 
+            | self.piece_bb(Some(!on_color), Queen);
         let mut pinned: Bitboard = Bitboard(0);
         // xray rook attacks from our king, past our pieces as blockers, 
         // to oponent's pieces
@@ -470,6 +390,7 @@ impl Board {
     /// Makes the move `m`, updating this board's internal state
     /// This function assumes `m` is a valid move
     pub fn make_move_mut(&mut self, m: &CMove) {
+        use Square::*;
         let promo_piece = m.is_promo();
         let from = m.get_from();
         // a one on the from square, else zeroes
@@ -607,7 +528,7 @@ impl Board {
         
         let king_bb = self.piece_bb(Some(for_color), King);
         let king_square: Square = king_bb.bit_scan().unwrap();
-        let attacks_to_king = self.attacks_to(king_square, for_color.op());
+        let attacks_to_king = self.attacks_to(king_square, !for_color);
         let checked = attacks_to_king.occupied();
         let not_pinned = !self.pins(for_color, king_square);
 
@@ -639,7 +560,7 @@ impl Board {
         let king_moves = not_to_own_piece
             .filter_map(|to| {
                 // Can't move to a square op attacks
-                if self.attacks_to(to, for_color.op()).occupied() {
+                if self.attacks_to(to, !for_color).occupied() {
                     None
                 } else if self.piece_on_square(to).is_some() {
                     Some(CMove::new(king_square, to, cmove::CAPTURE))
@@ -705,7 +626,7 @@ impl Board {
     }
 
     fn generate_pawn_moves(&self, for_color: Color, not_pinned: Bitboard) -> Vec<CMove> {
-        let op_occupied = self.color_bb(for_color.op()); 
+        let op_occupied = self.color_bb(!for_color); 
         let pawn_bb = self.piece_bb(Some(for_color), Pawn) & not_pinned;
         let can_push = self.pawns_can_push(for_color);
         let can_dpush = self.pawns_can_dpush(for_color);
@@ -775,17 +696,18 @@ impl Board {
     }
 
     fn castle_moves(&self, for_color: Color) -> Vec<CMove> {
+        use Square::*;
         let mut moves = vec![];
         match for_color {
             White => {
                 // can king-side castle
-                if self.castling_rights & Self::WKING_SIDE_MASK > 0 {
+                if self.castling_rights & WKING_SIDE_MASK > 0 {
                     if (self.attacks_to(F1, Black) | self.attacks_to(G1, Black)).empty() && (self.occupied_bb & Bitboard(1 << 6 | 1 << 5)).empty()
                     {
                         moves.push(CMove::new(E1, G1, cmove::KING_CASTLE));
                     }
                 }
-                if self.castling_rights & Self::BKING_SIDE_MASK > 0 {
+                if self.castling_rights & BKING_SIDE_MASK > 0 {
                     if (self.attacks_to(C1, Black) | self.attacks_to(D1, Black)).empty() && (self.occupied_bb & Bitboard(1 << 3 | 1 << 4)).empty()
                     {
                         moves.push(CMove::new(E1, C1, cmove::QUEEN_CASTLE));
@@ -794,13 +716,13 @@ impl Board {
             },
             Black => {
                 // can king-side castle
-                if self.castling_rights & Self::BKING_SIDE_MASK > 0 {
+                if self.castling_rights & BKING_SIDE_MASK > 0 {
                     if (self.attacks_to(F8, White) | self.attacks_to(G8, White)).empty() && (self.occupied_bb & Bitboard(1 << 62 | 1 << 61)).empty()
                     {
                         moves.push(CMove::new(E8, G8, cmove::KING_CASTLE));
                     }
                 }
-                if self.castling_rights & Self::BKING_SIDE_MASK > 0 {
+                if self.castling_rights & BKING_SIDE_MASK > 0 {
                     if (self.attacks_to(C1, Black) | self.attacks_to(D1, Black)).empty() && (self.occupied_bb & Bitboard(1 << 58 | 1 << 59)).empty()
                     {
                         moves.push(CMove::new(E8, C8, cmove::KING_CASTLE));

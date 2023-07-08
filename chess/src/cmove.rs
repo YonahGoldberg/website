@@ -1,5 +1,4 @@
-use super::Square;
-use crate::board::Piece::{self, *};
+use super::utils::{Square, Piece::{self, *}};
 use num::FromPrimitive;
 
 pub const QUIET: u16 = 0;

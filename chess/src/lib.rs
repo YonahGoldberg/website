@@ -3,8 +3,13 @@
 //! was obtained from the official chess programming wiki: 
 //! <https://www.chessprogramming.org/Bitboards>
 
+mod board;
+mod bitboard;
+mod tables;
+mod cmove;
+mod engine;
+mod utils;
+
+extern crate num;
 #[macro_use]
 extern crate num_derive;
-extern crate num;
-pub mod board;
-pub mod engine;

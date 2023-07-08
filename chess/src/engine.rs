@@ -1,4 +1,5 @@
-use crate::board::{*, cmove::CMove};
+use super::cmove::CMove;
+use super::board::Board;
 use std::i32;
 
 fn evaluate() -> i32 {

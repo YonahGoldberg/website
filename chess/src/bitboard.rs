@@ -4,21 +4,18 @@
 /// Properties include a particular piece being present, that square being
 /// a potential target, etc... These bitboard are implmented in 
 /// Little Endian Rank-File (LERF) order, meaning towards higher
-/// valued bits we traverse first across a rank (the numbers), then up files (the letters).
+/// valued bits we traverse first across a rank (the letters), then up files (the numbers).
 /// 
 /// To read more on bitboard representations, you can visit: 
 /// <https://www.chessprogramming.org/Square_Mapping_Considerations>
 
-pub mod tables;
-pub use tables::*;
-use super::{Square, Piece};
+use super::utils::Square;
 use num::FromPrimitive;
 use std::ops::{
     BitAnd, BitAndAssign, BitOr, 
     BitOrAssign, BitXor, BitXorAssign, 
     Shl, ShlAssign, Shr, ShrAssign, Not,
-    Sub, Add, SubAssign, AddAssign, Index, IndexMut,
-    Deref, DerefMut,
+    Sub, Add, SubAssign, AddAssign,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -133,7 +130,7 @@ impl ToString for Bitboard {
             }
             res += "\n";
         }
-        return res;
+        res
     }
 }
 

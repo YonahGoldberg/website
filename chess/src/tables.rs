@@ -1,4 +1,4 @@
-use super::Bitboard;
+use super::bitboard::Bitboard;
 
 /// PAWN_ATTACKS\[Color]\[Square] is a bitboard representing
 /// where a pawn of that color on that square can attack
