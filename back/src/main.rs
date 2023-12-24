@@ -1,41 +1,30 @@
-use std::{env, net::SocketAddr};
+use std::env;
+use tokio::net::TcpListener;
+use axum::Router;
 
 mod services;
 
 // setup constants
-const FRONT_PUBLIC: &str = "./front_end/dist";
 const SERVER_PORT: &str = "8080";
-const SERVER_HOST: &str = "0.0.0.0";
+const SERVER_HOST: &str = "localhost";
 
 #[tokio::main]
 async fn main() {
     let (port, host) = from_env();
+    let addr = format!("{}:{}", host, port);
 
-    let addr = format!("{}:{}", port, host)
-        .parse::<SocketAddr>()
-        .expect("Can not parse address and port");
+    let routes_all = Router::new()
+        .merge(services::routes_public());
 
-    let app = Router::new()
-        .merge(services::front_public_route());
+    let listener = TcpListener::bind(addr).await.unwrap();
 
-    axum::Server::bind(&addr)
-        .serve(app.make_into_service())
-        .with_graceful_shutdown(shutdown_signal())
+    axum::serve(listener, routes_all.into_make_service())
         .await
-        .unwrap();
-}
-
-/// Tokio signal handler that will wait for a user to press CTRL+C.
-/// We use this in our `Server` method `with_graceful_shutdown`.
-async fn shutdown_signal() {
-    tokio::signal::ctrl_c()
-        .await
-        .expect("Expect shutdown signal handler");
-    println!("signal shutdown");
+        .unwrap()
 }
 
 /// variables from environment or default to configure server
-/// port, host, secret
+/// port, host
 fn from_env() -> (String, String) {
     (
         env::var("SERVER_PORT")
