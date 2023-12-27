@@ -5,8 +5,8 @@ use axum::Router;
 mod services;
 
 // setup constants
-const SERVER_PORT: &str = "8080";
-const SERVER_HOST: &str = "localhost";
+const PORT: &str = "8080";
+const HOST: &str = "0.0.0.0";
 
 #[tokio::main]
 async fn main() {
@@ -27,11 +27,11 @@ async fn main() {
 /// port, host
 fn from_env() -> (String, String) {
     (
-        env::var("SERVER_PORT")
+        env::var("PORT")
             .ok()
-            .unwrap_or_else(|| SERVER_PORT.to_string()),
+            .unwrap_or_else(|| PORT.to_string()),
         env::var("SERVER_HOST")
             .ok()
-            .unwrap_or_else(|| SERVER_HOST.to_string()),
+            .unwrap_or_else(|| HOST.to_string()),
     )
 }

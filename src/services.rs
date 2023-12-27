@@ -15,7 +15,7 @@ struct NotFoundError;
 
 impl IntoResponse for NotFoundError {
     fn into_response(self) -> Response {
-        let error_page = Assets::get("/error.html").unwrap();
+        let error_page = Assets::get("/html/error.html").unwrap();
         Response::builder()
             .status(StatusCode::NOT_FOUND)        
             .header(header::CONTENT_TYPE, "text/html")
@@ -30,12 +30,17 @@ pub fn routes_public() -> Router {
 }
 
 pub async fn public_handler(uri: Uri) -> Result<impl IntoResponse, impl IntoResponse> {
-    let path = if uri.path() == "/" { "/index.html" } else { uri.path() };
+    let path = match uri.path() {
+        "/" => "/html/index.html",
+        "/chess" => "/html/chess.html",
+        _ => uri.path()
+    };
 
     let mime_type = match path.rsplit('.').next() {
         Some("html") => "text/html",
         Some("css") => "text/css",
         Some("js") => "application/javascript",
+        Some("png") => "image/x-png",
         _ => return Err(NotFoundError)
     };
     
