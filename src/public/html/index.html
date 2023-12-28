@@ -4,14 +4,86 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
-    <title>Goldbergville</title>
+    <title>Yonah Goldberg</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              'main': ['system-ui', 'Helvetica', 'Arial']
+            },
+            colors: {
+              'main': '#40414f'
+            }
+          }
+        }
+      }
+    </script>
   </head>
-  <body>
-    <main>
-      <p>
-        Welcome to Goldbergville! While the current content 
-        may be sparse, exciting developments are on the horizon.
-      </p>
+  <body class="bg-main">
+    <nav class="text-white p-4 flex justify-end">
+      <a href="https://www.linkedin.com/in/yonahgoldberg" target="_blank" rel="noopener noreferrer" class="mr-4">
+          <img src="img/linkedin-icon.png" alt="LinkedIn" class="w-6 h-6 sm:w-10 sm:h-10">
+      </a>
+      <a href="https://github.com/yonahgoldberg" target="_blank" rel="noopener noreferrer" class="mr-4">
+          <img src="img/github-icon.png" alt="GitHub" class="w-6 h-6 sm:w-10 sm:h-10">
+      </a>
+      <a href="mailto:yonah.goldberg@icloud.com" class="mr-4">
+          <img src="img/email-icon.png" alt="Email" class="w-6 h-6 sm:w-10 sm:h-10">
+      </a>
+      <a href="/img/resume.pdf">
+        <img src="img/resume-icon.png" alt="Resume" class="w-6 h-6 sm:w-10 sm:h-10">
+      </a>
+    </nav>
+    <div class="bg-slate-800 h-1"></div>
+    <main class="w-full h-full p-2">
+      <div class="flex flex-col md:flex-row justify-center items-center flex-wrap md:justify-start md:items-start">
+        <img src="img/profile.png" alt="profile picture" class="max-w-96 max-h-96 rounded-md m-6">
+        <div class="mx-2">
+          <p class="text-slate-200 text-lg font-semibold text-center mx-4">Introduction</p>
+          <p class="text-slate-200 max-w-96 mx-4 mb-4 mt-2">
+            Hi, my name is Yonah Goldberg. I'm a junior studying computer science,
+            with a concentration in computer systems, at Carnegie Mellon University.
+            Currently, I'm interested in programming languages and compilers.
+          </p>
+          <p class="text-slate-200 max-w-96 m-4">
+            In spring '23
+            I took <a class="underline" href="https://www.cs.cmu.edu/afs/cs/academic/class/15411-f20/www/">Compiler Design</a>
+            and wrote a small compiler for <a class="underline" href="https://www.cs.cmu.edu/afs/cs/academic/class/15411-f20/www/">C0</a>,
+            a safe subset of C. The compiler primarily targets x86-64 assembly, but for the final project my partner
+            and I extended it to compile to LLVM IR. We also compile to SSA form and perform various optimizations, such as
+            peephole optimizations, constant/copy propagation, tail recursion optimization, and dead code elimination. Because
+            it would result in an academic integrity violation, the compiler is privated on my GitHub, but I can show
+            anyone who wants to take a look.
+          </p>
+        </div>
+        <div class="mx-2">
+          <p class="text-slate-200 max-w-96 m-4">
+            At the same time, I did research under <a class="underline" href="https://www.cs.cmu.edu/~jssunshi/">Josh Sunshine</a>
+            on <a class="underline" href="https://penrose.cs.cmu.edu/">Penrose</a>, a <a class="underline" href="https://en.wikipedia.org/wiki/Domain-specific_language">DSL</a> for
+            creating mathematical diagrams from plaintext. I primarily worked on running the Penrose compiler and
+            optimizer on a separate thread using web workers.
+          </p>
+          <p class="text-slate-200 max-w-96 m-4">
+            Currently I'm doing research under <a class="underline" href="https://s3d.cmu.edu/people/core-faculty/titzer-ben.html">Ben Titzer</a>, working
+            on <a class="underline" href="https://github.com/titzer/virgil/tree/master">Virgil</a>, a fast a lightweight systems programming language. I'm
+            not very far long, but my goal is to write a backend and assembler to complile Virgil to Arm64.
+          </p>
+          <p class="text-slate-200 max-w-96 m-4">
+            For summer '24, I'm excited to be interning at NVIDIA in Santa Clara on the LLVM compiler optimizations team.
+          </p>
+        </div>
+        <div class="mx-2">
+          <p class="text-slate-200 text-lg font-semibold text-center mx-4">About this Website</p>
+          <p class="text-slate-200 max-w-96 m-4">
+            <a class="underline" href="https://github.com/YonahGoldberg/website">This website</a> is made
+            with a Rust backend using <a class="underline" href="https://docs.rs/axum/latest/axum/">Axum</a> and
+            <a class="underline" href="https://tokio.rs/">Tokio</a>. It has a simple HTML and JS frontend
+            and is styled with <a class="underline" href="https://tailwindcss.com/">Tailwind CSS</a>.
+          </p>
+        </div>
+      </div>
     </main>
   </body>
 </html>

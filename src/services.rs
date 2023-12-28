@@ -41,6 +41,8 @@ pub async fn public_handler(uri: Uri) -> Result<impl IntoResponse, impl IntoResp
         Some("css") => "text/css",
         Some("js") => "application/javascript",
         Some("png") => "image/x-png",
+        Some("pdf") => "application/pdf",
+        Some("jpeg") => "image/jpeg",
         _ => return Err(NotFoundError)
     };
     

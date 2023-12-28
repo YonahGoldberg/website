@@ -4,14 +4,32 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
-    <title>Goldbergville</title>
+    <title>Yonah Goldberg</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              'main': ['system-ui', 'Helvetica', 'Arial']
+            },
+            colors: {
+              'main': '#40414f'
+            }
+          }
+        }
+      }
+    </script>
   </head>
-  <body>
-    <main>
-      <p>
-        Oops! It looks like you made an invalid request. Try another
-        one to explore the beautiful land of Goldbergville!
-      </p>
+  <body class="bg-main">
+    <main class="w-full h-full p-2">
+      <div class="flex flex-col justify-center items-center flex-wrap">
+        <img src="img/pony.jpeg" alt="pony" class="max-w-96 max-h-96 sm:max-w-max sm:max-h-max rounded-md m-6">
+        <p class="text-slate-200 text-lg font-semibold">
+          Oops! Looks like you entered an invalid url. Here is a cute pony picture
+          to cheer you up. Click <a class="underline" href="/">here</a> to go home.
+        </p>
+      </div>
     </main>
   </body>
 </html>
