@@ -1,4 +1,7 @@
-use super::utils::{Square, Piece::{self, *}};
+use super::utils::{
+    Piece::{self, *},
+    Square,
+};
 use num::FromPrimitive;
 
 pub const QUIET: u16 = 0;
@@ -60,13 +63,13 @@ impl CMove {
     pub fn is_promo(&self) -> Option<Piece> {
         if self.0 & 8 > 0 {
             // Lowest 2 bits
-            Some(
-                match self.0 & 3 {
-                    0 => Knight, 1 => Bishop,
-                    2 => Rook, 3 => Queen,
-                    _ => panic!()
-                }
-            )
+            Some(match self.0 & 3 {
+                0 => Knight,
+                1 => Bishop,
+                2 => Rook,
+                3 => Queen,
+                _ => panic!(),
+            })
         } else {
             None
         }

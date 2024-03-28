@@ -2,20 +2,17 @@
 /// per square for the standard 8x8 chess board. A 1 bit set indicates
 /// the presence (or lack thereof) of some property for that square.
 /// Properties include a particular piece being present, that square being
-/// a potential target, etc... These bitboard are implmented in 
+/// a potential target, etc... These bitboard are implmented in
 /// Little Endian Rank-File (LERF) order, meaning towards higher
 /// valued bits we traverse first across a rank (the letters), then up files (the numbers).
-/// 
-/// To read more on bitboard representations, you can visit: 
+///
+/// To read more on bitboard representations, you can visit:
 /// <https://www.chessprogramming.org/Square_Mapping_Considerations>
-
 use super::utils::Square;
 use num::FromPrimitive;
 use std::ops::{
-    BitAnd, BitAndAssign, BitOr, 
-    BitOrAssign, BitXor, BitXorAssign, 
-    Shl, ShlAssign, Shr, ShrAssign, Not,
-    Sub, Add, SubAssign, AddAssign,
+    Add, AddAssign, BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Not, Shl,
+    ShlAssign, Shr, ShrAssign, Sub, SubAssign,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -96,14 +93,22 @@ impl Bitboard {
     /// if there is no 1 bit
     pub fn bit_scan(&self) -> Option<Square> {
         let trailing_zeros = self.0.trailing_zeros();
-        if trailing_zeros == 64 { None } else { Some(FromPrimitive::from_u32(trailing_zeros).unwrap()) }
+        if trailing_zeros == 64 {
+            None
+        } else {
+            Some(FromPrimitive::from_u32(trailing_zeros).unwrap())
+        }
     }
 
     /// Returns the square of the most significant 1 bit, or None
     /// if there is no 1 bit
     pub fn bit_scan_reverse(&self) -> Option<Square> {
         let leading_zeros = self.0.leading_zeros();
-        if leading_zeros == 64 { None } else { Some(FromPrimitive::from_u32(leading_zeros ^ 63).unwrap()) }
+        if leading_zeros == 64 {
+            None
+        } else {
+            Some(FromPrimitive::from_u32(leading_zeros ^ 63).unwrap())
+        }
     }
 
     pub fn empty(&self) -> bool {
