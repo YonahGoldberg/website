@@ -1,36 +1,163 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="X-UA-Compatible" content="ie=edge">
-    <title>15-418 Final Project</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-      tailwind.config = {
-        theme: {
-          extend: {
-            fontFamily: {
-              'main': ['system-ui', 'Helvetica', 'Arial']
-            },
-            colors: {
-              'main': '#40414f'
-            }
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="ie=edge">
+  <title>15-418 Final Project</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            'main': ['system-ui', 'Helvetica', 'Arial']
+          },
+          colors: {
+            'main': '#40414f'
           }
         }
       }
-    </script>
-  </head>
-  <body class="bg-main">
-    <main class="w-full h-full p-2">
-        <p class="text-slate-200 text-xl text-center">Carnegie Mellon 15-418 Spring 2024 Final Project: Cilk Fork-Join Parallelism Library</h1>
-        <p class="text-slate-200 text-lg text-center">Yonah Goldberg and Jack Ellinger</h2>
-        <div class="m-4">
-            <p class="text-slate-200 text-xl text-center">Links</p>
-            <a href="https://yonahg.com/img/cilk-proposal.pdf">
-                <p class="text-slate-200 text-lg text-center underline">Project Proposal</p>
-            </a>
+    }
+  </script>
+</head>
+<body class="bg-main text-slate-200">
+  <main class="max-w-3xl mx-auto p-4">
+    <h1 class="text-4xl font-bold text-center mb-8">Carnegie Mellon 15-418 Spring 2024 Final Project</h1>
+      <h2 class="text-2xl font-semibold text-center mb-8">Cilk Fork-Join Parallelism Library</h2>
+    <div class="mb-8">
+      <div class="flex flex-row space-x-8 mt-4 justify-center">
+        <div>
+          <p><span class="font-semibold">Yonah Goldberg</span></p>
+          <p><a href="mailto:ygoldber@andrew.cmu.edu" class="text-blue-500 hover:underline">ygoldber@andrew.cmu.edu</a></p>
         </div>
-    </main>
-  </body>
+        <div>
+          <p><span class="font-semibold">Jack Ellinger</span></p>
+          <p><a href="mailto:jellinge@andrew.cmu.edu" class="text-blue-500 hover:underline">jellinge@andrew.cmu.edu</a></p>
+        </div>
+      </div>
+    </div>
+    <div class="mb-8">
+      <h3 class="text-xl font-semibold">Important Links</h3>
+      <ul class="list-disc ml-4">
+        <li><a href="https://github.com/YonahGoldberg/cilk" class="text-blue-500 hover:underline">Github Repo</a></li>
+        <li><a href="https://yonahg.com/img/cilk-proposal.pdf" class="text-blue-500 hover:underline">Project Proposal</a></li>
+        <li><a href="https://yonahg.com/img/cilk-milestone.pdf" class="text-blue-500 hover:underline">Project Milestone Report</a></li>
+      </ul>
+    </div>
+    <div class="mb-8">
+      <h3 class="text-xl font-semibold">Summary</h3>
+      <p>We are going to implement a library to mimic the functionality of Cilk on top of C++. Users will be able to make calls to cilk_spawn and cilk_sync, on top of other potential Cilk primitives, and have our library manage concurrency.</p>
+    </div>
+    <div class="mb-8">
+      <h3 class="text-xl font-semibold">Background</h3>
+      <p class="mb-4">
+        Cilk extends C++ with high level parallelism constructs. It allows programmers to easily write parallel code without low level thread management. Cilk implements fork-join parallelism. Users who want to fork off a function call to run in parallel can annotate their call cilk_spawn my_function(). When users want to join threads so that main thread execution can not proceed before all forked threads finish, they can insert a cilk_sync statement.
+      </p>
+      <p class="mb-4">
+        The benefit of fork-join parallelism is that Cilk programs behave almost exactly the same with Cilk primitives inserted as if they were not inserted. Therefore, it is extremely easy to parallelize a program quickly. Cilk programs also easily extend to divide-and-conquer algorithm implementations, where there are many recursive calls that can be forked to run in parallel. The goal of a Cilk programmer is to fork off enough units of work so that all worker threads stay busy. They want enough independent work to allow for good load balancing, but not too much independent work so that high granularity does not incur too much runtime overhead.
+      </p>
+      <p class="mb-4">
+      OpenCilk is implemented using a work-queue per-thread and a work-stealing policy. When a thread calls cilk_spawn my_function(), it indicates that my_function may be run in parallel. There are two strategies we could implement to allow for the parallelism:
+      </p>
+      <ol class="list-disc mb-4 ml-4">
+        <li><p>
+          Child Stealing - the function my_function is put onto the thread's work-queue and may be stolen by another thread to run in parallel. The main thread continues executing code beyond the function call.
+        </p></li>
+        <li><p>
+          Continuation Stealing - the main thread executes my_function and puts a continuation of the rest of the main thread's current function on the work-queue.
+        </p></li>
+      </ol>
+      <p>
+      There are many interesting implementation decisions in Cilk that we want to explore. For example, the impact of child stealing versus continuation stealing, the impact of increasing thread count on performance, and the impact of different work-queue implementations.
+      </p>
+    </div>
+    <div class="mb-8">
+      <h3 class="text-xl font-semibold">The Challenge</h3>
+      <p class="mb-4">The main challenge is how to provide efficient parallelization for a broad spectrum of use cases. We may make some implementation decisions that work well on some problems and poorly on others. It will be important to benchmark our implementation heavily to test the impact of our implementation choices.</p>
+      <p class="mb-4">The following are some decision tradeoffs that we intend to explore: child-stealing versus continuation passing; worker thread pool versus per-fork thread spawn; single work queue versus per-thread work queue. We can also explore various work-queue implementations and work-stealing strategies. </p>
+      <p class="mb-4">As a result, implementing Cilk is a very open ended problem, which allows us to test many parallel design tradeoffs we learned in class and see how they compare across different implementations workloads.</p>
+    </div>
+    <div class="mb-4">
+      <h3 class="text-xl font-semibold mb-4">Schedule</h3>
+      <table class="w-full table-auto border-collapse border border-gray-800 text-black">
+        <thead>
+          <tr class="bg-gray-800 text-white">
+            <th class="border border-gray-800 px-4 py-2">Week</th>
+            <th class="border border-gray-800 px-4 py-2">Goals</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="bg-gray-100">
+            <td class="border border-gray-800 px-4 py-2">3/24</td>
+            <td class="border border-gray-800 px-4 py-2">
+              <ul class="list-disc ml-4">
+                <li>Completed Proposal.</li>
+                <li>Conducted more Research on Implementation Strategies.
+                  <ul class="list-disc ml-4">
+                    <li>How does setjmp work and will we be able to use it for continuation stealing?</li>
+                    <li>How exactly is OpenCilk implemented? -- read research paper and documentation.</li>
+                    <li>Figure out how function calls (especially recursive ones) are divided among the threads.</li>
+                  </ul>
+                </li>
+                <li>Begin to collect Cilk programs we want to benchmark.</li>
+              </ul>
+            </td>
+          </tr>
+          <tr class="bg-gray-100">
+            <td class="border border-gray-800 px-4 py-2">3/31</td>
+            <td class="border border-gray-800 px-4 py-2">
+              <ul class="list-disc ml-4">
+                <li>Created the simple scheduler.</li>
+                <li>Created the simple child stealing scheduler.</li>
+                <li>Added fib, quicksort, n-queens, and rectmul tests.</li>
+              </ul>
+            </td>
+          </tr>
+          <tr class="bg-gray-100">
+            <td class="border border-gray-800 px-4 py-2">4/7</td>
+            <td class="border border-gray-800 px-4 py-2">
+              <ul class="list-disc ml-4">
+                <li>Finished the simple child stealing scheduler as described in work completed.</li>
+                <li>Began simple continuation scheduler. Works with one thread.</li>
+                <li>Began lock-free queue child stealing scheduler.</li>
+              </ul>
+            </td>
+          </tr>
+          <tr class="bg-gray-100">
+            <td class="border border-gray-800 px-4 py-2">4/14</td>
+            <td class="border border-gray-800 px-4 py-2">
+              <ul class="list-disc ml-4">
+                <li>Test out stack saving method for cooperative threads by Stephan Brennan (JACK)</li>
+                <li>Begin work on continuation stealing implementation (YONAH)</li>
+                <li>Work on lock-free implementation of Child Stealing scheduler (JACK)</li>
+              </ul>
+            </td>
+          </tr>
+          <tr class="bg-gray-100">
+            <td class="border border-gray-800 px-4 py-2">4/21</td>
+            <td class="border border-gray-800 px-4 py-2">
+              <ul class="list-disc ml-4">
+                <li>Complete continuation stealing implementation (YONAH/JACK helps if it is too difficult)</li>
+                <li>Complete lock-free and possibly other implementations of the child-stealing approach (different stealing strategies) and adapt it to the continuation stealing implementation for benchmarking (JACK/YONAH can help migrate the code over)</li>
+                <li>Add more benchmarking tests (JACK)</li>
+              </ul>
+            </td>
+          </tr>
+          <tr class="bg-gray-100">
+            <td class="border border-gray-800 px-4 py-2">4/28</td>
+            <td class="border border-gray-800 px-4 py-2">
+              <ul class="list-disc ml-4">
+                <li>Improve implementations with testing (BOTH)</li>
+                <li>Benchmark implementations, create tons of graphs, comparing speedup of all the implementations on a wide variety of benchmark programs. (BOTH)</li>
+                <li>Create poster displaying our results. (BOTH)</li>
+              </ul>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+</body>
 </html>
+
