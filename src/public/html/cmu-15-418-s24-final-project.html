@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="X-UA-Compatible" content="ie=edge">
   <title>15-418 Final Project</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.21.0/themes/prism.min.css">
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -24,9 +25,9 @@
 <body class="bg-main text-slate-200">
   <main class="max-w-3xl mx-auto p-4">
     <h1 class="text-4xl font-bold text-center mb-8">Carnegie Mellon 15-418 Spring 2024 Final Project</h1>
-      <h2 class="text-2xl font-semibold text-center mb-8">Cilk Fork-Join Parallelism Library</h2>
+    <h2 class="text-2xl font-semibold text-center mb-8">Cilk Fork-Join Parallelism Library</h2>
     <div class="mb-8">
-      <div class="flex flex-row space-x-8 mt-4 justify-center">
+      <div class="flex flex-col sm:flex-row space-y-4 sm:space-x-8 sm:space-y-0 mt-4 justify-center items-center">
         <div>
           <p><span class="font-semibold">Yonah Goldberg</span></p>
           <p><a href="mailto:ygoldber@andrew.cmu.edu" class="text-blue-500 hover:underline">ygoldber@andrew.cmu.edu</a></p>
@@ -43,14 +44,17 @@
         <li><a href="https://github.com/YonahGoldberg/cilk" class="text-blue-500 hover:underline">Github Repo</a></li>
         <li><a href="https://yonahg.com/img/cilk-proposal.pdf" class="text-blue-500 hover:underline">Project Proposal</a></li>
         <li><a href="https://yonahg.com/img/cilk-milestone.pdf" class="text-blue-500 hover:underline">Project Milestone Report</a></li>
+        <li><a href="https://yonahg.com/img/cilk-final.pdf" class="text-blue-500 hover:underline">Project Final Report</a></li>
       </ul>
     </div>
     <div class="mb-8">
       <h3 class="text-xl font-semibold">Summary</h3>
-      <p>We are going to implement a library to mimic the functionality of Cilk on top of C++. Users will be able to make calls to cilk_spawn and cilk_sync, on top of other potential Cilk primitives, and have our library manage concurrency.</p>
+      <p class="mb-4">We implemented a fork-join parallelism library that mimics the core functionality of Cilk. Users can create programs that easily fork off tasks to run in parallel. In the background, our schedulers manage thread scheduling. We also created a bench-marking suite of six programs with widely different workloads to test the performance of our schedulers.</p>
+      <p class="mb-4">Our best scheduler, ChildSchedulerLF, achieves an average 5.8x speedup across our test suite, whereas Open-Cilk averages 7.3x speedup. Both of these measurements are for speedup using 12 threads (our largest number of threads). Without our worst-performing test, N-Queens, our best scheduler achieves an average 6.4x speedup across our test suite, whereas Open-Cilk averages 7.0x speedup</p>
     </div>
     <div class="mb-8">
-      <h3 class="text-xl font-semibold">Background</h3>
+      <h3 class="text-xl font-semibold mb-4">Background</h3>
+      <h3 class="text-lg font-semibold">About Cilk</h3>
       <p class="mb-4">
         Cilk extends C++ with high level parallelism constructs. It allows programmers to easily write parallel code without low level thread management. Cilk implements fork-join parallelism. Users who want to fork off a function call to run in parallel can annotate their call cilk_spawn my_function(). When users want to join threads so that main thread execution can not proceed before all forked threads finish, they can insert a cilk_sync statement.
       </p>
@@ -68,15 +72,173 @@
           Continuation Stealing - the main thread executes my_function and puts a continuation of the rest of the main thread's current function on the work-queue.
         </p></li>
       </ol>
-      <p>
-      There are many interesting implementation decisions in Cilk that we want to explore. For example, the impact of child stealing versus continuation stealing, the impact of increasing thread count on performance, and the impact of different work-queue implementations.
+      <p class="mb-4">
+        Open-Cilk chooses the continuation-stealing approach because it tends to be more efficient. With child-stealing, programs run depth-first, placing all spawned function calls onto work queues. Queues can often blow up in size, leading to worse performance.
       </p>
+      <p class="mb-4">In contrast, continuation stealing programs run breadth-first, creating just enough work. The drawback of continuation-stealing is it is drastically more complicated to implement without instrumenting a compiler. We spent a lot of time working on a continuation-stealing implementation using setjmp and longjmp, and successfully managed to get threads to save execution context and have that context resumed by another thread. Unfortunately, it had too many bugs and we ran out of time implementing it. It works *most of the time* on our quicksort benchmark, and you can still view the code at schedulers/cont_scheduler.hpp.</p>
+      <h3 class="text-lg font-semibold">Library API</h3>
+      <p class="mb-4">We aimed to mimic the core functionality of Cilk, providing a simple scheduler interface that users interact with:</p>
+      <pre>
+        <code class="language-cpp">
+// initialize the scheduler with a size n thread pool and
+// run func with n threads
+T run(std::function<T()> func, int n);
+
+// spawn a function to be potentially run in parallel.
+// Returns a future on the returned result.
+std::future<T> spawn(std::function<T()> func);
+
+// Synchronize by waiting for fut to finish.
+// While waiting, steal work from from other task queues.
+// Return the result of fut.
+T sync(std::future<T> fut);
+        </code>
+    </pre>
+    <p class="mb-4">Our interface works nicely on a lot of different programs. In the worst case, when there are many dependencies, users have to collect vectors of futures and wait/reduce on their results. Consider the following nice implementation of quicksort:</p>
+    <pre>
+      <code class="language-cpp">
+void quicksort(int *begin, int *end) {
+  if (end - begin <= 5000) {
+    seqQuicksort(begin, end);
+    return;
+  }
+
+  end--;
+  int pivot = *end;
+  auto middle =
+      std::partition(begin, end, [pivot](int x) { return x < pivot; });
+  std::swap(*end, *middle);
+
+  auto x = scheduler->spawn(
+      [begin, middle]() { return quicksort(begin, middle); });
+  quicksort(++middle, ++end);
+
+  scheduler->sync(std::move(x));
+}
+      </code>
+    </pre>
+    <p class="mb-4">Notice the call to a sequential version of quicksort for small problem sizes. This is an optimization we had to make for our child-stealing schedulers that we explain in the next section. The main point to make is that, true to Cilk style, our library requires minimal additional code, which is attractive for users who want to quickly parallelize programs.</p>
+    <h3 class="text-lg font-semibold">Library API</h3>
+    <p class="mb-4">We now break down our benchmark suite, describing each program and its workload.</p>
+    <ol class="list-disc mb-4 ml-4">
+      <li class="mb-2"><p>
+        <b>Fibonacci</b> computes the nth Fibonacci number using the inefficient exponential algorithm. It has many dependencies because to compute the nth Fibonacci number you need to make two recursive calls on n - 1 and n - 2. Because it has so many sub-problems, we set a stop point where fib stops recurring and computes the result sequentially.
+      </p></li>
+      <li class="mb-2"><p>
+        <b>Quicksort</b> sorts an array of size n using the classic quicksort algorithm. Quicksort has zero dependencies. All parts of the array can be sorted in parallel. However, it still has a large recursive tree. Because it has too many sub-problems, we set a stop point where quicksort stops recurring and sorts the array sequentially.
+      </p></li>
+      <li class="mb-2"><p>
+        <b>NQueens</b> calculates the number of ways to place n queens on an n by n chess board such that no queens attack each other. There is a lot of sequential work on each sub-problem to check if any queens attack each other, so there is high parallelism.
+      </p></li>
+      <li class="mb-2"><p>
+        <b>Heat</b> performs heat diffusion over a 2D grid. It uses Jacobi-type iteration to update the temperature values at each grid point based on neighboring values. Iterations have to be performed sequentially, but there is high parallelism in each iteration.
+      </p></li>
+      <li class="mb-2"><p>
+        <b>NBody</b> simulates the NBody problem from lecture where particles move across space with an initial velocity and influenced by gravitational pull. We parallelize across updating the velocities of the bodies. Then we synchronize and then parallelize across updating the positions of the bodies. There's a lot of parallelism across the bodies, but also a good amount of synchronization on each iteration.
+      </p></li>
+      <li><p>
+        <b>PFor</b> computes a parallel for-loop. On each iteration, it spawns off a function to sort a large array. There are no dependencies and high parallelism. This test is meant to look at the difference between continuation stealing and child-stealing. The child-stealer runs inefficiently, immediately putting tasks for each loop iteration on the queue.
+      </p></li>
+    </ol>
     </div>
     <div class="mb-8">
-      <h3 class="text-xl font-semibold">The Challenge</h3>
-      <p class="mb-4">The main challenge is how to provide efficient parallelization for a broad spectrum of use cases. We may make some implementation decisions that work well on some problems and poorly on others. It will be important to benchmark our implementation heavily to test the impact of our implementation choices.</p>
-      <p class="mb-4">The following are some decision tradeoffs that we intend to explore: child-stealing versus continuation passing; worker thread pool versus per-fork thread spawn; single work queue versus per-thread work queue. We can also explore various work-queue implementations and work-stealing strategies. </p>
-      <p class="mb-4">As a result, implementing Cilk is a very open ended problem, which allows us to test many parallel design tradeoffs we learned in class and see how they compare across different implementations workloads.</p>
+      <h3 class="text-xl font-semibold mb-4">Approach</h3>
+      <h3 class="text-lg font-semibold">Scheduler Implementations</h3>
+      <p class="mb-4">We now describe our four scheduler implementations in depth, including optimizations and how we arrived at our final implementations.</p>
+      <h3 class="text-md font-semibold">NoSpawnScheduler</h3>
+      <p class="mb-4">The NoSpawnScheduler is a sequential scheduler that we use when calculating speedup. The following is its API implementation:</p>
+      <ol class="list-disc mb-4 ml-4">
+        <li><p>
+          T run(std::function<T()> func, int n) - run func sequentially.
+        </p></li>
+        <li><p>
+          std::future<T> spawn(std::function<T()> func) - run func sequentially.
+        </p></li>
+        <li><p>
+          T sync(std::future<T> fut) - no-op.
+        </p></li>
+      </ol>
+      <h3 class="text-md font-semibold">SimpleScheduler</h3>
+      <p class="mb-4">The SimpleScheduler is our simplest parallel scheduler. The following is its API implementation:</p>
+      <ol class="list-disc mb-4 ml-4">
+        <li><p>
+          T run(std::function<T()> func, int n) - set n to be the max number of threads that can ever be running at the same time. Run func.
+        </p></li>
+        <li><p>
+          std::future<T> spawn(std::function<T()> func) - check to see if there are less than n threads running in concurrently right now. If there are less, spawn a thread to run func in parallel. Otherwise, run func sequentially.
+        </p></li>
+        <li><p>
+          T sync(std::future<T> fut) - block on fut until it is ready and return the result.
+        </p></li>
+      </ol>
+      <h3 class="text-md font-semibold">ChildScheduler</h3>
+      <p class="mb-4">The ChildScheduler is our first complex scheduler. The following is its API:</p>
+      <ol class="list-disc mb-4 ml-4">
+        <li><p class="mb-2">
+          T run(std::function<T()> func, int n) - Create n work-queues, one for each thread. Each queue is a deque, allowing you to push and pop from both sides. Each queue can hold many tasks. A task is a wrapper around a std::packaged_task<T()>. Essentially, this is just a function where you can get a handle on a future to its returned value. The future's result is only ready after the packaged task is run. Each queue is guarded by a unique mutex lock for synchroniztaion.
+        </p>
+        <p class="mb-2">
+          We place a packaged task for the given function on a queue. We then spawn n - 1 threads and have all n threads (including the main thread) enter a workerThread loop. These threads only leave the loop when there are no tasks in any queues and no workers are currently working on any tasks. We maintain two atomic counters for this. When all threads are finished, it means all work is done, so the main thread joins all the spawned threads and then retrieves and returns the result from the original packaged task placed on a queue.
+        </p>
+        <p class="mb-2">
+          The workerThread loop is simple. Each thread repeatedly tries to find work in its own queue. If it does, it runs the task. Otherwise, it steals work from a random task queue to run. An important implementation detail is that workers must take work off their own queue from the same side of the queue that work is pushed. They also must steal work off the opposite side of other worker queues. 
+        </p>
+        <p class="mb-2">
+          The point is that you threads to often resolve their own immediate dependencies. On large problems with large dependency trees, we often run into a problem with the depth-first nature of child schedulers where work queues and call-stacks blow up in size and cause segmentation faults. Taking work off the front of your queue, where the most recent dependencies that need to get resolved are stored, is vital.
+        </p></li>
+        <li class="mb-2"><p>
+          std::future<T> spawn(std::function<T()> func) - simply push a task to run func onto this thread's work queue.
+        </p></li>
+        <li><p>
+          T sync(std::future<T> fut) - While fut is not ready, take a task from some work queue and run it. As explained, we always try and steal from this thread's work queue first, on the same side that work is pushed to. If our work queue is empty, steal from the opposite side of a random work queue.
+        </p></li>
+      </ol>
+      <h3 class="text-md font-semibold">ChildSchedulerLF</h3>
+      <p class="mb-2">The lock free child scheduler has the exact same API implementation as the normal child scheduler, with the exception that instead of using a std::deque for work-queues, we use a custom lock-free queue. For the lock-free queue, we adapted <a class="text-blue-500 hover:underline" href="https://blog.molecular-matters.com/2015/08/24/job-system-2-0-lock-free-work-stealing-part-1-basics/">code written by Stefan Reinalter</a>. The main idea is that we use a fixed size queue with both a head and tail pointer, functioning like a dequeue. Each thread has one of these queues, and they push and pop at the same side of the queue (call this the head). If there is no work in your current queue, you look at a random queue and attempt to steal work from them. To do this, you attempt to take from the tail end of the queue in order to reduce contention between the thread that owns this queue and the one trying to steal from it. In order to do this with proper synchronization, the head and tail pointers are atomic integers that we only update when we know our change worked. To know if are able to steal/pop a particular value, you need to do a compare exchange that attempts to update the head/tail pointer, and if you succeed, you can then take the value without any race conditions. If you fail, then you just return a null value indicating that you were unsuccessful and the loop that tries to get work will run again (assuming there is still work in the system to do).</p>
+    </div>
+    <div class="mb-8">
+      <h3 class="text-xl font-semibold">Target Machine</h3>
+      <p class="mb-4">We decided to test our schedulers on an M2 Macbook Pro with 16GB memory. We went with this approach because, for one, it was easier during development to test locally. Secondly, the CPU has 12 cores, so it has sufficient ability to demonstrate parallel speedup. We ensured while testing that no expensive processes were running concurrently.</p>
+    </div>
+    <div class="mb-8">
+      <h3 class="text-xl font-semibold">Results</h3>
+      <p class="mb-4">We now describe our results for benchmarking each of our schedulers compared to the performance of OpenCilk on the same program. We tried to pick large enough problem sizes so that running the problem in parallel would be useful and have decent speedup.</p>
+      <p class="mb-4">Our benchmark suite essentially consists of only divide-and-conquer implementations of problems, which are the most natural implementations for fork-join parallelism. It is important to note that as problem-size increases, the divide-and-conquer algorithms have larger sequential base cases (sometimes this means manually adjusting when we revert to a sequential solution, as in quicksort). With larger sequential base cases, algorithms spend a larger fraction of the time doing parallel work instead of synchronizing, so the speedup increases. Therefore, it was important that we pick a reasonable problem size for each problem and hold it constant. The main point of this project is to compare different schedulers against each other, so we find no problem in doing this.</p>
+      <p class="mb-4">Each benchmark is averaged over a specified number of iterations. We chose this number to be large enough so that we did not see a lot of variance in our results.</p>
+      <p class="mb-4">The baseline for each of these speedup graphs is an optimized sequential version that uses the future framework that our child implementations use. As a result, it has some overhead (about 14% on average) vs the normal sequential code without the futures leading to some superlinear speedup for the OpenCilk implementation. The problem sizes were chosen to take somewhat similar amounts of time across the threads. If we had more time, we would have liked to vary the problem sizes and test on different CPU's to see if these results hold.</p>
+      <h3 class="text-lg font-semibold">Quicksort</h3>
+      <p class="mb-4">We benchmark quicksort for array size 5,000,000 and averaging across 10 iterations. The quicksort function defaults to a sequential version when the problem size is less than 5,000. The following graph shows our results:</p>
+      <img class="mb-4" src="img/quicksort.png" alt="Quicksort Graph">
+      <p class="mb-4">Our best scheduler, ChildSchedulerLF, almost matches OpenCilk! The reason for this is that quicksort is one of our easiest benchmarks. There are no dependencies, so threads do not often steal work. The lock free child scheduler outperforms the regular child scheduler because there is low contention for accessing other thread's work queues. As we learned in lecture, lock-free code is best when there is low contention. The SimpleScheduler does not perform as well because of the large overhead of spawning threads. Threads receive uneven sized tasks, causing some to finish early, which makes us repeatedly spawn more threads.</p>
+      <h3 class="text-lg font-semibold">Fibonacci</h3>
+      <p class="mb-4">We benchmark fibonacci for n = 45 and average across 10 iterations for each of thread counts. The Fib function defaults to a sequential version when the problem size is less than 20. The following graph shows the speedup results for each of our implementations. </p>
+      <img class="mb-4" src="img/fib.png" alt="Fibonacci Graph">
+      <p class="mb-4">Looking at the results, OpenCilk performs the best followed by ChildLF, Child, and then the Simple Scheduler. Similar to Quicksort, this proved to be a fairly low contention environment where the lock-free implementation of ChildScheduler was able to perform a bit better. Looking at the time spent on compute time vs synchronization, both implementations were mostly doing computation, but the lock-free implementation was able to get the slight edge with reduced time synchronizing as the compare exchange was less costly than a lock. The Simple scheduler performs quite a bit worse as thread count increases, which is likely because the work is not being evenly distributed across the threads leading to a lot of stalling at the end. It also has that extra overhead of spawning the threads and not maintaining a thread pool leading to lesser performance.</p>
+      <h3 class="text-lg font-semibold">N-Queens</h3>
+      <p class="mb-4">We benchmark N-Queens for n = 14 and average across 5 iterations for each thread count. The following are our results:</p>
+      <img class="mb-4" src="img/nqueens.png" alt="N-Queens Graph">
+      <p class="mb-4">OpenCilk performs drastically better than all of our schedulers. Our simple and child scheduler achieve an unsatisfactory 3x speedup. This test case sometimes gave us problems when benchmarking, so the results might be due to a correctness issue. One thing to note is that clearly there is a good amount of contention because our lock-free scheduler performs poorly, which could have this kind of impact.</p>
+      <p class="mb-4">Another point to note is this is the only test case where in the end we have a large sum reduction, synchronizing on results of spawned functions. We saw in testing that some threads finish long before other threads, causing a lot of work-stealing and leading to more contention. This imbalance might play a major role in the performance drop-off.</p>
+      <h3 class="text-lg font-semibold">N-Body's</h3>
+      <p class="mb-4">We benchmark n-body's for n = 100000, which means there are 100000 particles in our "universe" that we will be simulating. The following are the results showing the speedup averaged across 10 iterations for each thread count:</p>
+      <img class="mb-4" src="img/nbody.png" alt="N-Body's Graph">
+      <p class="mb-4">The main form of parallelism comes from computing the velocity and position updates for all of the particles. OpenCilk performs the best with our child implementations having almost identical speedup. The Simple scheduler performs a lot worse after that. The continuation stealing approach/compiler optimizations for OpenCilk seem to perform a lot better in higher contention environments, and nbody's requires a lot more synchronization than QuickSort and Fib where we performed a lot better. While lock-free can be faster in a lot of instances, it does a decent amount of failed steals in this test leading to them performing similarly. The simple scheduler, for the same reasons as before, performs worse than our implementations as it does not divide the work properly and has overhead of spawning threads. </p>
+      <h3 class="text-lg font-semibold">Heat Diffusion</h3>
+      <p class="mb-4">We benchmark heat diffusion 5 iterations using parameters that were hand-tuned by the guy who made this test. The following are the results showing the speedup averaged across 5 iterations for each thread count:</p>
+      <img class="mb-4" src="img/heat.png" alt="Heat Diffusion Graph">
+      <p class="mb-4">The key insight for this graph is that Child scheduler performs better than lock free scheduler. In this test, failed stealing occurred the most leading to better performance as, when lock free did not successfully steal, it would get a null task back and have to repeat the cycle leading to a major slowdown. Simple scheduler performed worse for the same reasons as before, and OpenCilk was again able to do a decent bit better than our implementation as continuation-stealing seems to perform better in these higher contention environments as continuation stealing will disperse the work better when there are a lot of dependencies. </p>
+      <h3 class="text-lg font-semibold">Parallel For</h3>
+      <p class="mb-4">We benchmark parallel-for for 500 iterations of sorting an array of size 100,000. The following are our results:</p>
+      <img class="mb-4" src="img/pfor.png" alt="Heat Diffusion Graph">
+      <p class="mb-4">We perform well relative to OpenCilk on all of our schedulers. This is an interesting test case because we expected OpenCilk to perform much better relatively. Our child-stealing schedulers will run depth-first and add 500 tasks to the work queues immediately, which we thought would be high overhead. It turns out that the overhead is smaller than we thought. Additionally, parallel-for has little synchronization and even workload distribution. All of these characteristics allow our schedulers to perform well.</p>
+    </div>
+    <div class="mb-8">
+      <h3 class="text-xl font-semibold">Refferences</h3>
+      <ul class="list-disc ml-4">
+        <li><a href="https://blog.molecular-matters.com/2015/08/24/job-system-2-0-lock-free-work-stealing-part-1-basics/" class="text-blue-500 hover:underline">https://blog.molecular-matters.com/2015/08/24/job-system-2-0-lock-free-work-stealing-part-1-basics/</a></li>
+        <li><a href="https://github.com/neboat/cilkbench" class="text-blue-500 hover:underline">https://github.com/neboat/cilkbench</a></li>
+        <li><a href="https://www.opencilk.org/doc/" class="text-blue-500 hover:underline">https://www.opencilk.org/doc/</a></li>
+      </ul>
     </div>
     <div class="mb-4">
       <h3 class="text-xl font-semibold mb-4">Schedule</h3>
@@ -158,6 +320,8 @@
       </table>
     </div>
   </main>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.21.0/components/prism-core.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.21.0/plugins/autoloader/prism-autoloader.min.js"></script>
 </body>
 </html>
 
