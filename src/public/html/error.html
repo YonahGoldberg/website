@@ -21,13 +21,49 @@
       }
     </script>
   </head>
+  <nav class="text-white p-4 flex justify-between items-center">
+    <div>
+      <a href="/" rel="noopener noreferrer" class="mr-4 text-slate-200 font-semibold">Home</a>
+      <div class="relative inline-block text-left">
+        <button id="dropdown-btn" type="button" class="inline-flex justify-center items-center w-full font-semibold rounded-md text-slate-200">
+          Projects
+          <!-- Heroicon name: solid/chevron-down -->
+          <svg id="chevron-icon" class="-mr-1 ml-2 h-5 w-5 transition-transform transform" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+            <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
+          </svg>
+        </button>
+        <div id="dropdown-menu" class="hidden absolute left-0 mt-6 w-56 rounded-md shadow-lg bg-slate-800 ring-black" role="menu" aria-orientation="vertical" aria-labelledby="dropdown-btn">
+          <div class="py-1" role="none">
+            <!-- Dropdown items -->
+            <a href="/cmu-15-418-s24-final-project" class="block px-4 py-2 text-sm text-slate-200 hover:bg-slate-700" role="menuitem">Cilk Fork-Join Thread Library</a>
+            <a href="/dijkstra" class="block px-4 py-2 text-sm text-slate-200 hover:bg-slate-700" role="menuitem">Dijkstra's Algorithm</a>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="flex">
+      <a href="https://www.linkedin.com/in/yonahgoldberg" target="_blank" rel="noopener noreferrer" class="mr-4">
+          <img src="img/linkedin-icon.png" alt="LinkedIn" class="w-8 h-8 sm:w-10 sm:h-10">
+      </a>
+      <a href="https://github.com/yonahgoldberg" target="_blank" rel="noopener noreferrer" class="mr-4">
+          <img src="img/github-icon.png" alt="GitHub" class="w-8 h-8 sm:w-10 sm:h-10">
+      </a>
+      <a href="mailto:yonah.goldberg@icloud.com" class="mr-4">
+          <img src="img/email-icon.png" alt="Email" class="w-8 h-8 sm:w-10 sm:h-10">
+      </a>
+      <a href="/img/resume.pdf">
+        <img src="img/resume-icon.png" alt="Resume" class="w-8 h-8 sm:w-10 sm:h-10">
+      </a>
+    </div>
+  </nav>
+  <div class="bg-slate-800 h-1"></div>
   <body class="bg-main">
     <main class="w-full h-full p-2">
-      <div class="flex flex-col justify-center items-center flex-wrap">
-        <img src="img/pony.jpeg" alt="pony" class="max-w-96 max-h-96 sm:max-w-max sm:max-h-max rounded-md m-6">
-        <p class="text-slate-200 text-lg font-semibold">
+      <div class="flex flex-col justify-center items-center flex-wrap m-4">
+        <img src="img/pony.jpg" alt="pony" class="rounded-md mb-4">
+        <p class="text-slate-200 text-lg">
           Oops! Looks like you entered an invalid url. Here is a cute pony picture
-          to cheer you up. Click <a class="underline" href="/">here</a> to go home.
+          to cheer you up.
         </p>
       </div>
     </main>

@@ -35,6 +35,8 @@ pub async fn public_handler(uri: Uri) -> Result<impl IntoResponse, impl IntoResp
         "/" => "/html/index.html",
         "/chess" => "/html/chess.html",
         "/cmu-15-418-s24-final-project" => "/html/cmu-15-418-s24-final-project.html",
+        "/dijkstra" => "/html/dijkstra.html",
+        "/optcomp" => "/html/optcomp.html",
         _ => uri.path(),
     };
 
@@ -44,7 +46,9 @@ pub async fn public_handler(uri: Uri) -> Result<impl IntoResponse, impl IntoResp
         Some("js") => "application/javascript",
         Some("png") => "image/x-png",
         Some("pdf") => "application/pdf",
-        Some("jpeg") => "image/jpeg",
+        Some("jpg") => "image/jpeg",
+        Some("mov") => "video/quicktime",
+        Some("gif") => "image/gif",
         _ => return Err(NotFoundError),
     };
 
